@@ -6,7 +6,10 @@ App web instalable (PWA) para configurar la lavasecadora LG WD14 (WD14WVC4S6 / W
 
 - **Asistente**: escribes qué vas a lavar ("4 toallas blancas muy sucias, y secarlas"), te pregunta lo que falte y te dice programa, temperatura, centrifugado, secado, opciones, productos y el paso a paso. También responde preguntas como "¿qué es el candado?" o "error UE".
 - **Filtros**: lo mismo, pero eligiendo prendas, color, suciedad, cantidad y secado con botones.
+- En los dos se elige qué vas a hacer: **solo lavar**, **lavar y secar**, o **solo secar** ropa ya lavada (no pregunta color ni suciedad; indica modo de secado, centrifugado previo y qué prendas apartar).
 - **Panel**: réplica del panel para practicar. Mantén presionado un botón para ver su función escondida; el modo "¿Qué es esto?" explica cada botón, luz o ícono.
+
+El panel real de la lavadora es distinto al que dibuja el manual: tiene Vapor (*Anti arrugas), TurboWash (*Enjuague+), Secado (*EcoHybrid), Retrasar fin (*Wi-Fi) y Añadir elemento (*Inicio remoto), y temperaturas Fría, 20, 30, 40, 50 y 60 °C. La app sigue el panel real (marcado "Tu panel"); lo deducido va marcado "Por confirmar".
 - **Guía**: botones, íconos, mensajes y errores, programas, modos de secado, dispensador, símbolos de etiquetas y mantenimiento, con buscador.
 
 ## Archivos

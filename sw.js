@@ -1,6 +1,6 @@
 /* Guarda la app en el celular para que funcione sin internet.
    Al publicar cambios, sube el número de VERSION para que el celular descargue lo nuevo. */
-const VERSION = 'lavado-v2';
+const VERSION = 'lavado-v4';
 const ARCHIVOS = [
   './',
   'index.html',

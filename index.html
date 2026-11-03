@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <meta name="theme-color" content="#1c1e21">
+  <!-- Declara tema claro y oscuro propios: evita que el modo oscuro de Samsung Internet recoloree la página. -->
+  <meta name="color-scheme" content="dark light">
   <meta name="description" content="Asistente sin internet para configurar la lavasecadora LG WD14: programas, botones, íconos y cuidado de cada prenda.">
   <title>Guía de Lavado</title>
   <link rel="manifest" href="manifest.webmanifest">
@@ -12,22 +14,15 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-  <header class="barra-sup">
-    <div class="marca">
-      <span class="marca-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="4.5" y="3" width="15" height="18" rx="3"/><path d="M4.5 7.5h15"/><circle cx="12" cy="14" r="4.2"/><circle cx="7.4" cy="5.3" r=".6" fill="currentColor" stroke="none"/></svg></span>
-      <div class="marca-txt"><h1 id="titulo">Asistente</h1><small>Guía de Lavado · LG WD14</small></div>
-    </div>
-    <button id="btn-limpiar" type="button" class="btn-sup" aria-label="Limpiar la conversación"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2c.1.9.8 1.6 1.7 1.6h5.8c.9 0 1.6-.7 1.7-1.6L17.5 7"/></svg><span>Limpiar</span></button>
-  </header>
-
   <main>
     <section id="tab-chat" class="tab activa" aria-label="Asistente">
       <div id="chat-log" class="chat-log" aria-live="polite"></div>
       <div class="chat-abajo">
         <div id="chat-chips" class="chips"></div>
         <form id="chat-form" class="chat-form" autocomplete="off">
+          <button id="btn-limpiar" type="button" class="btn-limpiar" aria-label="Limpiar la conversación" title="Limpiar la conversación" hidden><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2c.1.9.8 1.6 1.7 1.6h5.8c.9 0 1.6-.7 1.7-1.6L17.5 7"/></svg></button>
           <input id="chat-input" type="text" placeholder="¿Qué vas a lavar?" enterkeyhint="send" aria-label="Mensaje">
-          <button type="submit" aria-label="Enviar"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-7-6 16-3-6.5z"/><path d="M11 14.5 20 5"/></svg></button>
+          <button type="submit" class="enviar" aria-label="Enviar"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-7-6 16-3-6.5z"/><path d="M11 14.5 20 5"/></svg></button>
         </form>
       </div>
     </section>
@@ -40,10 +35,14 @@
           <div id="f-prendas" class="prendas-grid"></div>
         </div>
         <div class="filtro-bloque">
+          <h2>¿Qué vas a hacer?</h2>
+          <div class="seg" data-campo="modo"><button type="button" data-val="lavar">Solo lavar</button><button type="button" data-val="lavarSecar">Lavar y secar</button><button type="button" data-val="secar">Solo secar</button></div>
+        </div>
+        <div class="filtro-bloque solo-lavado">
           <h2>Color de la ropa <small>(puedes marcar varios)</small></h2>
           <div class="seg multi" data-campo="colores"><button type="button" data-val="blanco">Blanca</button><button type="button" data-val="claro">Clara o pastel</button><button type="button" data-val="color">De color</button><button type="button" data-val="oscuro">Oscura</button></div>
         </div>
-        <div class="filtro-bloque">
+        <div class="filtro-bloque solo-lavado">
           <h2>Suciedad</h2>
           <div class="seg" data-campo="suciedad"><button type="button" data-val="poca">Poca</button><button type="button" data-val="normal">Normal</button><button type="button" data-val="mucha">Mucha</button></div>
         </div>
@@ -51,15 +50,12 @@
           <h2>Cantidad</h2>
           <div class="seg" data-campo="carga"><button type="button" data-val="pequena">Poquita</button><button type="button" data-val="media">Medio tambor</button><button type="button" data-val="grande">Casi lleno</button></div>
         </div>
-        <div class="filtro-bloque">
-          <h2>¿Secar en la máquina?</h2>
-          <div class="seg" data-campo="secar"><button type="button" data-val="false">No, la tiendo</button><button type="button" data-val="true">Sí, secar</button></div>
-        </div>
         <div class="filtro-bloque extras">
           <label class="interruptor"><input type="checkbox" name="prisa"><span>Tengo prisa</span></label>
-          <label class="interruptor"><input type="checkbox" name="alergia"><span>Alergia o piel sensible</span></label>
+          <label class="interruptor solo-lavado"><input type="checkbox" name="alergia"><span>Alergia o piel sensible</span></label>
           <label class="interruptor"><input type="checkbox" name="planchar"><span>La voy a planchar</span></label>
-          <label class="interruptor"><input type="checkbox" name="separarColores"><span>Separar siempre por color</span></label>
+          <label class="interruptor solo-lavado"><input type="checkbox" name="separarColores"><span>Separar siempre por color</span></label>
+          <label class="interruptor solo-secado"><input type="checkbox" name="mojada"><span>Viene muy mojada (lavada a mano)</span></label>
         </div>
         <div id="f-resultado" class="resultado"></div>
       </div>
@@ -73,7 +69,7 @@
         </div>
         <div id="panel-msg" class="panel-msg" aria-live="polite"></div>
         <div id="panel-sim" class="panel-sim"></div>
-        <p class="sutil nota-pie">Réplica del panel según el manual. Mantén presionado Intensivo, Temperatura, Tiempo Diferido o Añadir Elemento para ver su función escondida. Lo marcado "Por confirmar" puede variar en tu lavadora.</p>
+        <p class="sutil nota-pie">Réplica de tu panel (según tu foto). Las funciones con * se activan manteniendo el botón: en la lavadora 3 s, aquí un segundo. Los nombres de la perilla vienen del manual; lo marcado "Por confirmar" puede variar en tu lavadora.</p>
       </div>
     </section>
 
@@ -82,9 +78,10 @@
         <input id="guia-buscar" type="search" placeholder="Buscar: candado, UE, suavizante, filtro…" aria-label="Buscar en la guía">
         <p id="guia-vacio" class="vacio" hidden>No encontré nada con esas palabras.</p>
         <div id="guia-secciones"></div>
-        <p class="sutil nota-pie">Fuente: Manual del propietario LG MFL71766718 (WD14WVC4S6 / WD14VVC4S6C / WD14PVC4S6C). Lo marcado "General" son recomendaciones generales de cuidado textil; la etiqueta de cada prenda siempre manda.</p>
+        <p class="sutil nota-pie">Fuentes: tu panel (botones, íconos y temperaturas) y el manual LG MFL71766718 (programas, mensajes y mantenimiento). Lo marcado "General" son recomendaciones de cuidado textil; la etiqueta de cada prenda siempre manda.</p>
       </div>
     </section>
+    <div id="toast" class="toast" role="status" hidden></div>
   </main>
 
   <nav class="tabbar" aria-label="Secciones">

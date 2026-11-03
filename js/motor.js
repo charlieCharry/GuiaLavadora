@@ -17,7 +17,7 @@ const Motor = (() => {
   const VOCAB = {
     color: {
       blanco: ['blanco', 'blanca'],
-      claro: ['claro', 'clara', 'muy claro', 'muy clara', 'pastel', 'tono pastel', 'beige', 'crema', 'hueso', 'blanco hueso', 'marfil', 'perla', 'celeste', 'lila', 'color claro', 'color muy claro', 'de color claro', 'de color muy claro', 'tono claro', 'gris claro', 'azul claro', 'rosado claro', 'rosa claro', 'verde claro', 'amarillo claro', 'palo de rosa', 'rosa palo', 'gris', 'gris perla'],
+      claro: ['claro', 'clara', 'muy claro', 'muy clara', 'pastel', 'tono pastel', 'beige', 'crema', 'hueso', 'blanco hueso', 'marfil', 'color perla', 'tono perla', 'celeste', 'lila', 'color claro', 'color muy claro', 'de color claro', 'de color muy claro', 'tono claro', 'gris claro', 'azul claro', 'rosado claro', 'rosa claro', 'verde claro', 'amarillo claro', 'palo de rosa', 'rosa palo', 'gris', 'gris perla'],
       color: ['color', 'de color', 'estampado', 'estampada', 'rojo', 'roja', 'azul', 'verde', 'amarillo', 'amarilla', 'rosado', 'rosada', 'morado', 'morada', 'naranja', 'fucsia', 'colorido', 'colorida', 'color vivo', 'color fuerte', 'de colores vivos'],
       oscuro: ['oscuro', 'oscura', 'negro', 'negra', 'azul oscuro', 'azul marino', 'gris oscuro', 'vinotinto', 'cafe oscuro', 'oscurito', 'oscurita', 'color oscuro', 'de color oscuro', 'gris carbon', 'grafito'],
       mezcla: ['mezclado', 'mezclada', 'revuelto', 'revuelta', 'de todos los colores', 'varios colores', 'colores variados']
@@ -44,7 +44,9 @@ const Motor = (() => {
       preguntaMezcla: ['mezclar', 'mezclo', 'mezclarla', 'mezclarlo', 'juntar', 'juntarla', 'junta', 'junto', 'junto con', 'por separado', 'separado', 'separada', 'separar', 'separarla', 'aparte', 'dos cargas', '2 cargas', 'dos tandas', '2 tandas', 'misma carga', 'misma tanda', 'combinar'],
       preguntaSecado: ['se puede secar', 'se puede secarla', 'puedo secar', 'puedo secarla', 'puedo secarlo', 'se seca', 'van a la secadora', 'va a la secadora', 'pueden ir a la secadora', 'puede ir a la secadora', 'aguanta secadora', 'aguanta la secadora', 'meter a la secadora', 'meterla a la secadora', 'se puede meter a la secadora', 'sirve la secadora', 'se pueden meter en la secadora', 'se pueden secar', 'se secan', 'pueden secarse', 'puede secarse', 'se pueden meter a la secadora', 'puedo meterlas a la secadora'],
       prodSuavizante: ['suavizante'],
-      prodCloro: ['cloro', 'blanqueador', 'clorox', 'hipoclorito']
+      prodCloro: ['cloro', 'blanqueador', 'clorox', 'hipoclorito'],
+      soloSecar: ['solo secar', 'solo secarla', 'solo secarlo', 'solo quiero secar', 'solo necesito secar', 'solo la quiero secar', 'solo las quiero secar', 'solo lo quiero secar', 'solo los quiero secar', 'solo voy a secar', 'solamente secar', 'unicamente secar', 'nada mas secar', 'secar nada mas', 'secarla nada mas', 'secarlo nada mas', 'solo para secar', 'solo secado', 'solo el secado', 'solo la secadora', 'solo secadora', 'secar sin lavar', 'secarla sin lavar', 'secarlo sin lavar', 'sin lavar', 'ya lavada', 'ya lavado', 'ya esta lavada', 'ya esta lavado', 'ya estan lavada', 'ya estan lavado', 'ya la lave', 'ya las lave', 'ya lo lave', 'ya los lave', 'ya lave', 'ya se lavo', 'ya se lavaron', 'recien lavada', 'recien lavado', 'esta mojada', 'estan mojada', 'lavada a mano', 'lavado a mano', 'la lave a mano', 'las lave a mano', 'lo lave a mano', 'los lave a mano', 'lave a mano'],
+      prodPerlas: ['perlas', 'perlas de olor', 'perlas de aroma', 'perlitas', 'perlitas de olor', 'potenciador de aroma', 'potenciador de olor', 'intensificador de aroma', 'aromatizante', 'aromatizante de ropa', 'perfume para ropa', 'unstopables']
     }
   };
 
@@ -125,6 +127,17 @@ const Motor = (() => {
     for (const m of MANCHAS) if (buscarTodas(tk, m.claves).length) r.manchas.push(m.tip);
     r.peligro = PELIGROSOS.filter(p => buscarTodas(tk, [p]).length);
     if (buscarTodas(tk, ['aceite', 'aceite de cocina', 'fritura', 'grasa']).length) r.flags.add('aceite');
+    // Sin consumir la palabra "ropa" (que también es una prenda): "ropa mojada", "ropa ya lavada"…
+    const ropaYa = buscarTodas(tk, ['ropa mojada', 'ropa humeda', 'ropa lavada', 'ropa recien lavada']);
+    if (ropaYa.length) {
+      r.flags.add('soloSecar');
+      // "Tengo ropa mojada: 2 camisetas…": ahí "ropa" no es otra prenda más.
+      if (r.prendas.length > 1) r.prendas = r.prendas.filter(p => !(PRENDA[p.id].generico && ropaYa.some(h => h.i === p.pos)));
+    }
+    if (buscarTodas(tk, ['a mano', 'mojada', 'mojado', 'empapada', 'empapado', 'chorreando', 'escurriendo', 'humeda', 'humedo']).length) r.flags.add('mojada');
+    // Qué va a hacer: solo lavar, lavar y secar, o solo secar (ropa ya lavada).
+    const hablaDeLavar = r.suciedad || buscarTodas(tk, ['lavar', 'lavarla', 'lavarlo', 'lavo', 'lavamos', 'lavando', 'lavada y secada', 'lavar y secar', 'lavado y secado']).length > 0;
+    r.modo = r.flags.has('soloSecar') ? 'secar' : r.secar === false ? 'lavar' : r.secar === true && hablaDeLavar ? 'lavarSecar' : null;
     r.pregunta = /\?/.test(texto) || buscarTodas(tk, ['puedo', 'se puede', 'sirve', 'conviene', 'es mejor', 'sera mejor', 'debo', 'hay que', 'le pongo', 'le echo', 'uso', 'usar', 'echar', 'recomiendas', 'que tal', 'es posible']).length > 0;
     r.texto = n;
     return r;
@@ -141,16 +154,21 @@ const Motor = (() => {
   }
 
   function aplicarMateriales(tk, r) {
+    const largo = p => (p.palabra || '').split(' ').length;
     for (const m of MATERIALES) {
-      const hits = buscarTodas(tk, m.claves);
-      if (!hits.length) continue;
       if (m.excepto && buscarTodas(tk, m.excepto).length) continue;
-      const objetivo = r.prendas.find(p => m.de.includes(p.id));
-      if (!objetivo) continue;
-      objetivo.id = m.a;
-      objetivo.nombre = null;
-      // Quita la prenda que salió de la misma palabra del material ("lana" sola, "pano" como trapo, etc.)
-      r.prendas = r.prendas.filter(p => p === objetivo || !hits.some(h => h.i === p.pos));
+      // "suéter de lana" ya es una prenda de lana: esa palabra no cambia a las demás prendas.
+      const hits = buscarTodas(tk, m.claves).filter(h => !r.prendas.some(p => p.id === m.a && largo(p) > h.n && h.i >= p.pos && h.i < p.pos + largo(p)));
+      for (const h of hits) {
+        // El material va con la prenda nombrada justo antes ("camisa de seda y jeans"); si no hay, con la siguiente.
+        const cands = r.prendas.filter(p => m.de.includes(p.id));
+        if (!cands.length) break;
+        const objetivo = cands.filter(p => p.pos < h.i).sort((a, b) => b.pos - a.pos)[0] || cands.sort((a, b) => a.pos - b.pos)[0];
+        objetivo.id = m.a;
+        objetivo.nombre = null;
+        // Quita la prenda que salió de la misma palabra del material ("lana" sola, "pano" como trapo, etc.)
+        r.prendas = r.prendas.filter(p => p === objetivo || p.pos !== h.i);
+      }
     }
   }
 
@@ -159,7 +177,9 @@ const Motor = (() => {
     color: { blanco: ['blanco', 'blanca', 'blancos', 'blancas'], claro: ['claro', 'clara', 'claros', 'claras', 'pastel'], color: ['color', 'colores', 'de color'], oscuro: ['oscuro', 'oscura', 'oscuros', 'oscuras', 'negro', 'negra'], mezcla: ['mezclado', 'mezclada', 'revuelto', 'revuelta', 'de todo', 'varios'] },
     suciedad: { poca: ['poca', 'poco', 'poquito', 'ligera', 'casi limpia', 'casi limpio'], normal: ['normal', 'regular', 'media', 'medio'], mucha: ['mucha', 'mucho', 'muy sucia', 'muy sucio', 'bastante', 'harta'] },
     carga: { pequena: ['pequena', 'poca', 'poquita', 'baja', 'chica', 'poco'], media: ['media', 'mediana', 'medio', 'mitad', 'normal'], grande: ['grande', 'llena', 'lleno', 'mucha', 'full', 'alta', 'completa'] },
-    secar: { si: ['si', 'sii', 'claro', 'dale', 'ok', 'secar', 'secarla', 'secarlas', 'en la maquina', 'en la lavadora'], no: ['no', 'nop', 'al aire', 'tender', 'la tiendo', 'las tiendo', 'colgar', 'al sol'] }
+    secar: { si: ['si', 'sii', 'claro', 'dale', 'ok', 'secar', 'secarla', 'secarlas', 'en la maquina', 'en la lavadora'], no: ['no', 'nop', 'al aire', 'tender', 'la tiendo', 'las tiendo', 'colgar', 'al sol'] },
+    // El orden importa: "lavar y secar" antes que "secar" o "lavar" sueltos.
+    modo: { lavarSecar: ['lavar y secar', 'lavarla y secarla', 'lavar y secarla', 'las dos', 'ambas', 'ambos', 'las dos cosas', 'todo'], secar: ['solo secar', 'solo secado', 'secar', 'secarla', 'secado', 'ya esta lavada', 'ya lavada', 'ya la lave', 'ya las lave', 'mojada'], lavar: ['solo lavar', 'lavar', 'lavarla', 'no secar', 'sin secar', 'la tiendo', 'las tiendo', 'tender', 'al aire', 'no'] }
   };
   function leerRespuesta(slot, texto) {
     const tk = tokens(norm(texto));
@@ -172,7 +192,14 @@ const Motor = (() => {
 
   // ---------- contexto de conversación ----------
   function nuevoContexto() {
-    return { prendas: [], colores: new Set(), suciedad: null, carga: null, secar: null, flags: new Set(), kg: null, manchas: [], peligro: [] };
+    return { prendas: [], colores: new Set(), suciedad: null, carga: null, secar: null, modo: null, flags: new Set(), kg: null, manchas: [], peligro: [] };
+  }
+  // modo: 'lavar' | 'lavarSecar' | 'secar' (solo secar ropa ya lavada).
+  function aplicarModo(ctx, modo) {
+    ctx.modo = modo;
+    ctx.secar = modo !== 'lavar';
+    if (modo !== 'secar') ctx.flags.delete('soloSecar');
+    return ctx;
   }
   function fusionar(ctx, r) {
     if (r.prendas.length) ctx.prendas = r.prendas;
@@ -180,7 +207,10 @@ const Motor = (() => {
     if (r.suciedad) ctx.suciedad = r.suciedad;
     if (r.carga) ctx.carga = r.carga;
     if (r.kg) ctx.kg = r.kg;
-    if (r.secar !== null) ctx.secar = r.secar;
+    if (r.modo) aplicarModo(ctx, r.modo);
+    else if (r.secar === true && ctx.modo === 'lavar') aplicarModo(ctx, 'lavarSecar');
+    else if (r.secar === false && ctx.modo) aplicarModo(ctx, 'lavar');
+    else if (r.secar !== null) ctx.secar = r.secar;
     r.flags.forEach(f => ctx.flags.add(f));
     ctx.manchas = [...new Set([...ctx.manchas, ...r.manchas])];
     ctx.peligro = [...new Set([...ctx.peligro, ...r.peligro])];
@@ -195,12 +225,15 @@ const Motor = (() => {
     if (sinVariante) return { slot: 'variante', prenda: sinVariante };
     const validas = prendasValidas(ctx);
     if (!validas.length) return null;
-    if (!ctx.colores.size) return 'color';
-    if (!ctx.suciedad) return 'suciedad';
+    const algunaSeca = validas.some(p => PRENDA[p.id].secado);
+    const modo = ctx.modo || (algunaSeca ? null : 'lavar');
+    if (!modo) return 'modo';
+    if (modo !== 'secar') {
+      if (!ctx.colores.size) return 'color';
+      if (!ctx.suciedad) return 'suciedad';
+    }
     const todasContadas = validas.every(p => p.cant);
     if (!todasContadas && !ctx.carga && !ctx.kg) return 'carga';
-    const algunaSeca = validas.some(p => PRENDA[p.id].secado);
-    if (ctx.secar === null && algunaSeca) return 'secar';
     return null;
   }
 
@@ -211,8 +244,8 @@ const Motor = (() => {
   const menorRpm = (a, b) => (idxR(a) <= idxR(b) ? a : b);
   const unico = arr => [...new Set(arr.filter(Boolean))];
   const fmtKg = kg => (kg < 10 ? kg.toFixed(1).replace('.0', '').replace('.', ',') : Math.round(kg)) + ' kg';
-  const fmtT = t => (t === 'Fría' ? 'Fría' : `${t} °C`);
-  const fmtR = r => (r === 'No' || r === '-' ? 'Sin centrifugado' : `${r} rpm`);
+  const fmtT = t => (t === 'Fría' ? 'Fría' : `${t} °C`);
+  const fmtR = r => (r === 'No' || r === '-' ? 'Sin centrifugado' : `${r} rpm`);
 
   function ajustarTemp(prog, t) {
     const p = PROGRAMAS[prog];
@@ -278,6 +311,7 @@ const Motor = (() => {
   }
 
   function recomendar(ctx) {
+    if (ctx.modo === 'secar') return recomendarSecado(ctx);
     const res = { tandas: [], noLavar: [], avisos: [] };
     for (const it of ctx.prendas) if (PRENDA[it.id] && PRENDA[it.id].noLavar) res.noLavar.push(PRENDA[it.id]);
     if (ctx.peligro.length) res.avisos.push({ tipo: 'peligro', manual: 7, txt: `Mencionaste ${ctx.peligro.join(', ')}. El manual prohíbe lavar o secar en la máquina prendas empapadas o manchadas con combustibles, solventes, ceras, pintura o aceites: riesgo de incendio o explosión. Límpialas a mano primero, al aire libre.` });
@@ -319,10 +353,7 @@ const Motor = (() => {
     // Temperatura y centrifugado
     let temp = ps.map(p => p.temp[color]).reduce(menorTemp);
     const tempMax = ps.map(p => p.tempMax).reduce(menorTemp);
-    if (ctx.suciedad === 'mucha' && idxT(temp) < idxT(tempMax)) {
-      const subida = TEMPS[idxT(temp) + 1];
-      if (subida !== '95' || color === 'blanco') temp = subida;
-    }
+    if (ctx.suciedad === 'mucha' && idxT(temp) < idxT(tempMax)) temp = TEMPS[idxT(temp) + 1];
     if (ctx.suciedad === 'poca' && idxT(temp) >= idxT('60') && !ps.some(p => p.id === 'trapos')) temp = '40';
     let rpm = ps.map(p => p.rpm).reduce(menorRpm);
 
@@ -342,8 +373,8 @@ const Motor = (() => {
       } else if (!suave && (kg === null || kg <= 5)) {
         notas.push({ txt: `Por la prisa uso TurboWash 59 (todo el ciclo en 59 min, máx. 5 kg) en vez de ${PROGRAMAS[prog].nombre}.` });
         prog = 'turbowash';
-      } else {
-        notas.push({ txt: 'No hay un programa rápido adecuado para estas prendas o esta cantidad: mejor no apurarlas.' });
+      } else if (suave) {
+        notas.push({ txt: 'No hay un programa rápido adecuado para estas prendas: mejor no apurarlas.' });
       }
     } else if (!suave && kg !== null && kg <= 5 && ctx.suciedad !== 'mucha' && !['trapos', 'edredon', 'mascotas'].includes(ps[0].id)) {
       alternativas.push(kg <= 2 && ctx.suciedad === 'poca'
@@ -376,14 +407,16 @@ const Motor = (() => {
     rpm = rpmFinal;
     p = PROGRAMAS[prog];
 
-    // Opciones
-    const op = { intensivo: false, prelavado: false, enjuague: false };
-    const quiereIntensivo = ctx.suciedad === 'mucha' || (ps.some(x => x.intensivo) && ctx.suciedad !== 'poca');
-    if (quiereIntensivo) {
-      if (p.op.intensivo) op.intensivo = true;
-      else if (ctx.suciedad === 'mucha') notas.push({ manual: 30, txt: `${p.nombre} no permite Intensivo.` });
-    }
+    // Opciones del panel: Vapor, TurboWash, Pre-Lavado (Vapor+TurboWash 3 s) y Enjuague+ (TurboWash 3 s).
+    const op = { vapor: false, turbo: false, prelavado: false, enjuague: false };
+    const aguantaCalor = ps.every(x => idxT(x.tempMax) >= idxT('40'));
+    const quiereVapor = ctx.suciedad === 'mucha' || ctx.flags.has('olor') || ctx.flags.has('alergia') || (ps.some(x => x.vapor) && ctx.suciedad !== 'poca');
+    if (quiereVapor && p.op.vapor === true && aguantaCalor) op.vapor = true;
     if (ctx.suciedad === 'mucha' && p.op.prelavado && !suave) op.prelavado = true;
+    if (ctx.flags.has('prisa') && p.op.turbo === true) {
+      op.turbo = true;
+      notas.push({ manual: 'panel', txt: 'Por la prisa, activa TurboWash: acorta el ciclo sin perder limpieza.' });
+    }
     if ((ps.some(x => x.enjuague) || ctx.flags.has('alergia')) && p.op.enjuague) op.enjuague = true;
     if (ctx.flags.has('olor') && p.op.enjuague) {
       notas.push({ manual: 52, txt: 'Si la ropa sale con olor: no te pases de detergente, sácala apenas termine y haz Limpieza de Tambor una vez al mes.' });
@@ -397,7 +430,7 @@ const Motor = (() => {
     const secado = calcularSecado(items, ctx, prog, kg);
 
     // Productos
-    const productos = calcularProductos(ps, color, kg, op, ctx);
+    const productos = calcularProductos(ps, color, kg, op, ctx, prog, temp);
 
     // Preparación y avisos
     const prep = unico([...ps.flatMap(x => x.prep), ...ctx.manchas]);
@@ -428,10 +461,9 @@ const Motor = (() => {
     const veredictos = items.map(it => ({ ...veredictoSecado(it.id), nombre: it.nombre || PRENDA[it.id].nombre }));
     const s = { pedido: ctx.secar === true, veredictos, modo: null, via: null, sacar: no.map(it => it.nombre || PRENDA[it.id].nombre), notas: [], avisos: [] };
     if (!s.pedido) return s;
-    if (!si.length) {
-      s.avisos.push('Ninguna de estas prendas debería ir a la secadora: tiéndelas.');
-      return s;
-    }
+    // Pediste secar en la máquina: alerta clara con las prendas que no lo aguantan.
+    if (no.length) s.alerta = { todas: !si.length, items: veredictos.filter(v => !v.ok) };
+    if (!si.length) return s;
     const modos = si.map(it => PRENDA[it.id].secado);
     s.modo = modos.includes('baja') ? 'baja'
       : (ctx.flags.has('planchar') || modos.every(m => m === 'plancha')) ? 'plancha' : 'normal';
@@ -461,11 +493,93 @@ const Motor = (() => {
       s.alternativa = `Con esa cantidad también sirve ${SECADO[t].nombre} (secado por tiempo fijo).`;
     }
     if (kgSecar !== null && kgSecar < 1) s.avisos.push('Con tan poca ropa la secadora seca peor: el manual sugiere agregar algunas toallas para que gire bien (p. 52).');
-    if (s.via === 'despues' && s.modo === 'normal') s.eco = 'En Sólo Secado también está Normal Eco: consume menos energía.';
+    if (s.via === 'opcion') s.notas.push('Si prefieres revisar la ropa antes de secar, no actives Secado: lava, saca lo que quieras y luego seca con Sólo Secado.');
+    if (s.modo === 'normal' && !ctx.flags.has('prisa')) s.eco = 'Si no tienes prisa: mantén Secado 3 s para EcoHybrid ⓔ (Eco). Ahorra agua, pero tarda más.';
     return s;
   }
 
-  function calcularProductos(ps, color, kg, op, ctx) {
+  // ---------- solo secar (ropa ya lavada) ----------
+  function recomendarSecado(ctx) {
+    const res = { soloSecar: true, tandas: [], noLavar: [], avisos: [], colores: { grupos: [], hayMezcla: false, juntas: true, separadoAMano: false } };
+    const items = ctx.prendas.filter(it => PRENDA[it.id] && !PRENDA[it.id].variantes);
+    const nombre = it => it.nombre || PRENDA[it.id].nombre;
+    const no = items.filter(it => !PRENDA[it.id].secado);
+    const si = items.filter(it => PRENDA[it.id].secado);
+    if (no.length) res.alerta = { todas: !si.length, items: no.map(it => ({ ...veredictoSecado(it.id), nombre: nombre(it) })) };
+    if (ctx.peligro.length || ctx.flags.has('aceite')) res.avisos.push({ tipo: 'peligro', manual: 4, txt: 'Nunca seques en la máquina ropa con aceite, combustible, solventes o pintura, aunque ya esté lavada: si todavía huele, riesgo de incendio. Tiéndela.' });
+    if (!si.length) return res;
+
+    // Kilos: contados por prenda, o la cantidad que dijiste repartida entre lo que sí se seca.
+    const contadas = items.every(it => it.cant);
+    const kgDe = lista => lista.reduce((t, it) => t + it.cant * PRENDA[it.id].kg, 0);
+    const kgTotal = contadas ? kgDe(items) : ctx.kg || (ctx.carga ? KG_CARGA[ctx.carga] : null);
+    const kgSi = kgTotal === null ? null : contadas ? kgDe(si) : kgTotal * si.length / items.length;
+
+    // Lo delicado (Temperatura baja) va aparte: el manual pide telas y grosores parecidos en cada secado.
+    const baja = si.filter(it => PRENDA[it.id].secado === 'baja');
+    const resto = si.filter(it => PRENDA[it.id].secado !== 'baja');
+    const grupos = [resto, baja].filter(g => g.length);
+    grupos.forEach(g => {
+      const kg = kgSi === null ? null : contadas ? kgDe(g) : kgSi * g.length / si.length;
+      res.tandas.push(tandaSecado(g, ctx, kg));
+    });
+    res.tandas.forEach((t, i) => { t.numero = i + 1; t.total = res.tandas.length; });
+    if (grupos.length > 1) res.avisos.push({ tipo: 'info', manual: 33, txt: 'Las separé en dos secados: lo delicado necesita Temperatura baja y lo demás se seca mejor en Normal. Si prefieres uno solo, sécalo todo en Temperatura baja (máx. 3,5 kg; tarda más).' });
+    return res;
+  }
+
+  function tandaSecado(items, ctx, kg) {
+    const ps = items.map(it => PRENDA[it.id]);
+    const nombres = items.map(it => (it.cant ? `${it.cant} × ` : '') + (it.nombre || PRENDA[it.id].nombre));
+    const modos = ps.map(p => p.secado);
+    const modo = modos.includes('baja') ? 'baja' : (ctx.flags.has('planchar') || modos.every(m => m === 'plancha')) ? 'plancha' : 'normal';
+    const avisos = [], notas = [], alternativas = [];
+    if (modo === 'normal' && modos.includes('plancha')) notas.push({ txt: 'Si piensas planchar camisas o pantalones de tela, usa Plancha: las deja apenas húmedas.' });
+    const lim = SECADO[modo].kg;
+    const partes = kg !== null && kg > lim ? Math.ceil(kg / lim) : 1;
+    if (partes > 1) avisos.push({ manual: 33, txt: `${SECADO[modo].nombre} seca máx. ${fmtKg(lim)} y aquí hay unos ${fmtKg(kg)}: sécala en ${partes} tandas.` });
+    if (kg !== null && kg < 1) avisos.push({ manual: 52, txt: 'Con tan poca ropa la secadora seca peor: el manual sugiere agregar algunas toallas para que gire bien.' });
+
+    // Centrifugado antes de secar (en Sólo Secado: ninguno, 1000, 1200 o 1400).
+    let rpm = '-';
+    if (ctx.flags.has('mojada')) {
+      const tope = ps.map(p => p.rpm).reduce(menorRpm);
+      rpm = ['1000', '1200', '1400'].filter(x => idxR(x) <= idxR(tope)).pop() || '-';
+      notas.push({ manual: 31, txt: rpm === '-'
+        ? `Viene muy mojada, pero estas telas no aguantan más de ${fmtR(tope)}: escúrrela a mano, sin retorcer, antes de secar.`
+        : `Como viene muy mojada, que centrifugue antes de secar (${fmtR(rpm)}): seca más rápido y gasta menos.` });
+    }
+
+    if (modo === 'normal' && kg !== null && kg <= 4) {
+      const t = kg <= 1 ? 't30' : kg <= 2 ? 't60' : 't120';
+      alternativas.push(`Con esa cantidad también sirve ${SECADO[t].nombre} (tiempo fijo).`);
+    }
+    if (!ctx.flags.has('prisa')) alternativas.push('Si no tienes prisa: mantén Secado 3 s para EcoHybrid ⓔ (Eco). Ahorra agua, pero tarda más.');
+
+    const prep = unico([
+      'Sacude cada prenda antes de meterla: se arruga menos y seca parejo.',
+      'Revisa los bolsillos (encendedores, papel, monedas).',
+      ...(ps.some(p => p.id === 'toallas') ? [] : ['Las prendas oscuras o estampadas, al revés.']),
+      ...ps.map(p => p.secadoInfo && p.id === 'sabanasFinas' ? p.secadoInfo : null)
+    ]);
+
+    const b = n => `<b class="tecla">${n}</b>`;
+    const ic = SECADO[modo].icono ? `{i:${SECADO[modo].icono}} ` : '';
+    const pasos = [
+      `Mete la ropa suelta, sin apretar (máx. ${fmtKg(lim)} en este modo). Sin detergente ni suavizante; las perlas de olor no sirven sin agua.`,
+      'Deja el grifo abierto: la lavadora usa agua mientras seca.',
+      `Presiona ${b('Encendido')}.`,
+      `Sin girar la perilla, presiona ${b('Secado')} hasta que se encienda ${ic}${b(SECADO[modo].nombre)}. (O gira la perilla a ${b('Sólo Secado')} y elige el modo con Secado.)`,
+      rpm === '-'
+        ? 'Centrifugado: déjalo en ninguno (-), porque la ropa ya viene centrifugada de la lavadora.'
+        : `Presiona ${b('Centrifugado')} hasta que se ilumine ${b(rpm)}: centrifuga antes de secar.`,
+      `Presiona ${b('Inicio/Pausa')}.`,
+      'Cuando termine (ENd), sácala enseguida. Si no alcanzas, la gira de vez en cuando (Cd) para que no se arrugue.'
+    ];
+    return { tipo: 'secado', nombres, items, modo, rpm, kg, partes, avisos: dedupe(avisos), notas: dedupe(notas), alternativas, prep, pasos };
+  }
+
+  function calcularProductos(ps, color, kg, op, ctx, prog, temp) {
     const tipos = unico(ps.map(x => x.detergente));
     let tipo = tipos[0] || (color === 'blanco' ? 'en polvo con blanqueador (el manual lo recomienda para blancos)' : 'polvo o líquido para carga frontal (HE)');
     if (op.prelavado && /l[ií]quido/.test(tipo)) tipo = 'en polvo (con Pre-Lavado no se usa líquido)';
@@ -486,17 +600,30 @@ const Motor = (() => {
     if (color !== 'blanco') cloro = { ok: false, txt: color === 'claro' ? 'No: también decolora los tonos claros y pasteles. Si quieres reforzar, usa blanqueador con oxígeno (sin cloro).' : 'No: decolora la ropa de color.' };
     else if (!sinCloro.length) cloro = { ok: true, txt: 'Puedes usarlo si la etiqueta lo permite (triángulo vacío). Diluido, en el compartimento principal.' };
     else cloro = { ok: false, txt: unico(sinCloro.map(x => x.cloroNota || `No para ${x.nombre.toLowerCase()}.`)).join(' ') };
-    return { tipo, dosis, suavizante, cloro };
+
+    // Perlas de olor: van al fondo del tambor vacío, antes de la ropa.
+    const sinPerlas = unico(ps.map(x => SIN_PERLAS[x.id]));
+    if (!sinPerlas.length && (ctx.flags.has('alergia') || ['antialergico', 'infantil'].includes(prog))) sinPerlas.push('Con alergia o piel sensible, mejor sin perfume extra.');
+    let perlas;
+    if (sinPerlas.length) perlas = { ok: false, txt: sinPerlas.join(' ') };
+    else {
+      const cant = carga === 'pequena' ? 'un cuarto de tapa' : carga === 'media' ? 'media tapa' : carga === 'grande' ? 'una tapa' : 'media tapa para media carga, una tapa si va lleno';
+      let txt = `Opcional (${cant}). Échalas primero al fondo del tambor vacío y luego mete la ropa; nunca en la gaveta.`;
+      if (temp === 'Fría' || temp === '20' || prog === 'rapido') txt += ' Con agua fría se disuelven peor: disuélvelas antes en un vaso de agua tibia.';
+      perlas = { ok: true, txt };
+    }
+    return { tipo, dosis, suavizante, cloro, perlas };
   }
 
   function construirPasos(t) {
     const p = PROGRAMAS[t.prog];
     const pasos = [];
     const b = n => `<b class="tecla">${n}</b>`;
+    if (t.productos.perlas.ok) pasos.push('Si usas perlas de olor: échalas primero al fondo del tambor vacío (nunca en la gaveta).');
     pasos.push('Mete la ropa suelta, sin apretar: tiene que girar libre.');
-    let det = `Pon el detergente en el ${b('compartimento principal')}.`;
-    if (t.op.prelavado) det += ` Pon también un poco en el ${b('compartimento de prelavado')}.`;
-    if (t.productos.suavizante.ok) det += ' Si quieres suavizante, en su compartimento sin pasar MAX.';
+    let det = `Pon el detergente en el compartimento ${b('principal')}: el grande, a la izquierda de la gaveta.`;
+    if (t.op.prelavado) det += ` Pon también un poco de detergente en polvo en el de ${b('prelavado')} (adelante a la derecha).`;
+    if (t.productos.suavizante.ok) det += ' Si quieres suavizante: atrás a la derecha, el de la flor, sin pasar MAX.';
     pasos.push(det);
     pasos.push(`Presiona ${b('Encendido')}.`);
     pasos.push(`Gira la perilla a ${b(p.nombre)}.`);
@@ -506,9 +633,10 @@ const Motor = (() => {
     if (t.rpm) pasos.push(t.rpm === p.rpm.def
       ? `Centrifugado: déjalo en ${b(t.rpm === 'No' ? 'No' : t.rpm)} (ya viene así).`
       : `Presiona ${b('Centrifugado')} hasta que se ilumine ${b(t.rpm)} (viene en ${p.rpm.def}).`);
-    if (t.op.intensivo) pasos.push(`Toca ${b('Intensivo')}: se enciende su luz.`);
-    if (t.op.prelavado) pasos.push(`Mantén ${b('Intensivo')} 3 segundos para Pre-Lavado: se enciende el ícono {i:prelavado} en la pantalla.`);
-    if (t.op.enjuague) pasos.push(`Toca ${b('Enjuague+')}: se enciende su luz.`);
+    if (t.op.vapor) pasos.push(`Toca ${b('Vapor')}: se enciende su luz. Si no enciende, este programa no lo admite: sigue sin él.`);
+    if (t.op.turbo) pasos.push(`Toca ${b('TurboWash')}: se enciende su luz y el tiempo baja.`);
+    if (t.op.prelavado) pasos.push(`Mantén ${b('Vapor')} y ${b('TurboWash')} a la vez 3 segundos para Pre-Lavado: se enciende {i:prelavado} en la pantalla.`);
+    if (t.op.enjuague) pasos.push(`Mantén ${b('TurboWash')} 3 segundos para Enjuague+: se enciende {i:enjuague} en la pantalla.`);
     const s = t.secado;
     if (s && s.modo && s.via === 'opcion') pasos.push(`Presiona ${b('Secado')} hasta que se encienda ${SECADO[s.modo].icono ? `{i:${SECADO[s.modo].icono}} ` : ''}${b(SECADO[s.modo].nombre)}. Deja el grifo abierto: lo usa durante el secado.`);
     pasos.push(`Presiona ${b('Inicio/Pausa')}. Verás --- mientras pesa la ropa${p.minutos ? `; termina en unos ${p.minutos} min` : ' y luego el tiempo estimado'}.`);
@@ -533,7 +661,7 @@ const Motor = (() => {
     ICONOS_PANTALLA.forEach(i => e.push({ tipo: 'icono', ref: i, claves: [i.nombre, ...i.claves].map(norm) }));
     Object.entries(PROGRAMAS).forEach(([id, p]) => e.push({ tipo: 'programa', ref: { id, ...p }, claves: [p.nombre, p.corto].filter(Boolean).map(norm) }));
     MANTENIMIENTO.forEach(m => e.push({ tipo: 'mant', ref: m, claves: [m.nombre, 'limpieza', 'limpiar'].map(norm) }));
-    DISPENSADOR.forEach(d => e.push({ tipo: 'disp', ref: d, claves: [d.nombre, 'detergente', 'suavizante', 'dispensador', 'gaveta', 'cajon'].map(norm) }));
+    DISPENSADOR.forEach(d => e.push({ tipo: 'disp', ref: d, claves: [d.nombre, ...(d.claves || []), 'dispensador', 'gaveta', 'cajon'].map(norm) }));
     return e;
   }
   const GUIA = entradasGuia();
@@ -568,7 +696,8 @@ const Motor = (() => {
       if (pts) puntajes.push({ e, pts });
     }
     puntajes.sort((a, b) => b.pts - a.pts);
-    return { pregunta, resultados: puntajes.slice(0, 3).map(x => x.e), mejor: puntajes[0] ? puntajes[0].pts : 0 };
+    const mejor = puntajes[0] ? puntajes[0].pts : 0;
+    return { pregunta, resultados: puntajes.filter(x => x.pts * 2 >= mejor).slice(0, 3).map(x => x.e), mejor };
   }
 
   // Suavizante y cloro, prenda por prenda.
@@ -576,13 +705,14 @@ const Motor = (() => {
     return ids.map(id => PRENDA[id]).filter(p => p && !p.noLavar && !p.variantes).map(p => ({
       nombre: p.nombre,
       suavizante: { ok: p.suavizante !== false, txt: p.suavizante === false ? (p.suavizanteNota || 'No recomendado.') : 'Sí, opcional, sin pasar la línea MAX.' },
+      perlas: { ok: !SIN_PERLAS[p.id], txt: SIN_PERLAS[p.id] || 'Sí, opcionales: al fondo del tambor vacío antes de la ropa, nunca en la gaveta.' },
       cloro: { ok: !!p.cloro, txt: p.cloro ? 'Solo si es blanca de algodón y la etiqueta lo permite.' : (p.cloroNota || 'No.') }
     }));
   }
 
   return {
     veredictoSecado, respuestaMezcla, respuestaProducto, gruposColor, prendasValidas,
-    leer, leerRespuesta, nuevoContexto, fusionar, faltante, recomendar, buscarGuia, norm,
+    leer, leerRespuesta, nuevoContexto, fusionar, aplicarModo, faltante, recomendar, buscarGuia, norm,
     PRENDA, NOMBRE_CARGA, NOMBRE_COLOR, fmtT, fmtR, fmtKg
   };
 })();

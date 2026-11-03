@@ -2,7 +2,8 @@
    Se combina con los límites del manual (programas, cargas, secado) en motor.js.
    temp: temperatura recomendada según el color de la carga. rpm: centrifugado recomendado.
    secado: modo recomendado ('normal' | 'plancha' | 'baja') o false si no debe ir a la secadora.
-   grupo: prendas del mismo grupo se pueden lavar juntas en una misma tanda. */
+   grupo: prendas del mismo grupo se pueden lavar juntas en una misma tanda.
+   vapor: se beneficia del botón Vapor (higiene o manchas) si el programa lo admite. */
 
 const T = (blanco, claro, color, oscuro) => ({ blanco, claro, color, oscuro });
 
@@ -28,7 +29,7 @@ const PRENDAS = [
   },
   {
     id: 'trapos', nombre: 'Trapos y limpiones de cocina', emoji: '🧽', comun: true, grupo: 'trapos', kg: 0.1,
-    programa: 'algodon', temp: T('60', '60', '60', '60'), tempMax: '95', rpm: '1400', intensivo: true,
+    programa: 'algodon', temp: T('60', '60', '60', '60'), tempMax: '60', rpm: '1400', vapor: true,
     secado: 'normal', suavizante: false, cloro: true,
     secadoNota: 'Si tenían aceite de cocina: el manual pide lavarlos en agua caliente con detergente extra antes de secar. Si después todavía huelen a aceite, NO los seques en la máquina (riesgo de incendio).',
     prep: ['Lávalos solos: la grasa y la suciedad pasan a la ropa.', 'Sacude migas y restos antes.'],
@@ -287,7 +288,7 @@ const PRENDAS = [
   },
   {
     id: 'manteles', nombre: 'Manteles y servilletas', emoji: '🍽️', grupo: 'cama', kg: 0.5,
-    programa: 'algodon', temp: T('60', '40', '40', '30'), tempMax: '60', rpm: '1000', intensivo: true,
+    programa: 'algodon', temp: T('60', '40', '40', '30'), tempMax: '60', rpm: '1000', vapor: true,
     secado: 'plancha', secadoNota: 'Los plastificados nunca a la secadora (manual).',
     suavizante: true, cloro: true,
     prep: ['Trata antes las manchas de comida o vino.'],
@@ -306,7 +307,7 @@ const PRENDAS = [
   },
   {
     id: 'trabajo', nombre: 'Uniformes y ropa de trabajo', emoji: '🦺', grupo: 'trabajo', kg: 0.7,
-    programa: 'algodon', temp: T('60', '40', '40', '40'), tempMax: '60', rpm: '1200', intensivo: true,
+    programa: 'algodon', temp: T('60', '40', '40', '40'), tempMax: '60', rpm: '1200', vapor: true,
     secado: 'normal', suavizante: true, cloro: true,
     prep: ['Lávala aparte de la ropa diaria.', 'Delantales con plástico: no se secan (manual).'],
     avisos: [],
@@ -487,7 +488,16 @@ const CONSEJOS = [
   { titulo: 'Qué no va a la secadora', txt: 'Goma, plástico o espuma (tapetes con base de goma, baberos, cortinas de baño, almohadas de espuma), telas impermeables, lana, fibra de vidrio y ropa con restos de aceite o solventes.', manual: 5 },
   { titulo: 'Al revés', txt: 'Jeans, oscuros, estampados, vinilos y prendas con lentejuelas: al revés conservan el color y el estampado.' },
   { titulo: 'Bolsa de malla', txt: 'Para medias, ropa interior, brasieres y cosas pequeñas: no se pierden entre el tambor y el sello. Llénala a menos de la mitad.', manual: 25 },
-  { titulo: 'Sácala enseguida', txt: 'La ropa húmeda dentro del tambor se arruga y toma olor. Si no alcanzas, usa Tiempo Diferido para que termine cuando llegues.', manual: 42 },
+  { titulo: 'Sácala enseguida', txt: 'La ropa húmeda dentro del tambor se arruga y toma olor. Si no alcanzas, usa Retrasar fin para que termine cuando llegues.', manual: 42 },
   { titulo: 'Ahorro', txt: 'Para la mayoría de la ropa, 30–40 °C basta. Algodón+ ahorra energía frente a Algodón con los mismos ajustes. Centrifugar alto acorta el secado.', manual: 28 },
   { titulo: 'Olor a humedad', txt: 'Limpieza de Tambor una vez al mes, puerta entreabierta después de lavar y gaveta limpia. Si persiste, una vez por semana durante 3 semanas.', manual: 52 }
 ];
+
+// Perlas de olor (potenciador de aroma): prendas en las que mejor no usarlas.
+const SIN_PERLAS = {
+  lana: 'Lana: pueden dejar residuo ceroso y el detergente para lanas ya perfuma.',
+  seda: 'Seda: el residuo mancha y opaca la tela.',
+  bebe: 'Ropa de bebé: mejor sin perfumes, por su piel.',
+  chaquetaImpermeable: 'Ropa impermeable: el residuo tapa la tela y deja de repeler el agua.',
+  chaquetaPlumas: 'Plumas: el residuo apelmaza el relleno.'
+};

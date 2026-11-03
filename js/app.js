@@ -4,7 +4,7 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const conIconos = html => html.replace(/\{i:(\w+)\}/g, (_, n) => icono(n, 'inline'));
-  const pag = p => (p && p !== true ? `<span class="fuente m">Manual p. ${p}</span>` : p === true ? '<span class="fuente m">Manual</span>' : '');
+  const pag = p => (p === 'panel' ? '<span class="fuente p">Tu panel</span>' : p && p !== true ? `<span class="fuente m">Manual p. ${p}</span>` : p === true ? '<span class="fuente m">Manual</span>' : '');
   const general = '<span class="fuente g">General</span>';
   const duda = '<span class="fuente d">Por confirmar</span>';
   const { fmtT, fmtR, fmtKg } = Motor;
@@ -15,8 +15,7 @@
   function irA(tab) {
     $$('.tab').forEach(s => s.classList.toggle('activa', s.id === 'tab-' + tab));
     $$('.tabbar button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
-    $('#titulo').textContent = TITULOS[tab];
-    $('#btn-limpiar').hidden = tab !== 'chat';
+    document.title = `${TITULOS[tab]} · Guía de Lavado`;
     if (tab === 'chat') desplazarChat();
   }
   $$('.tabbar button').forEach(b => {
@@ -28,9 +27,43 @@
   function htmlResultado(res) {
     let h = '';
     res.avisos.forEach(a => { h += `<div class="nota ${a.tipo === 'peligro' ? 'peligro' : a.tipo === 'info' ? 'info' : 'aviso'}">${icono(a.tipo === 'info' ? 'info' : 'alerta')}<p>${esc(a.txt)} ${a.manual ? pag(a.manual) : a.tipo === 'info' ? general : ''}</p></div>`; });
+    if (res.soloSecar) {
+      if (res.alerta) h = htmlAlertaSecado(res.alerta, true) + h;
+      res.tandas.forEach(t => { h += htmlTandaSecado(t); });
+      return h;
+    }
     res.noLavar.forEach(p => { h += `<div class="nota peligro">${icono('no')}<p><b>${esc(p.nombre)}:</b> ${esc(p.desc)} ${general}</p></div>`; });
     res.tandas.forEach(t => { h += htmlTanda(t); });
     return h;
+  }
+
+  // Solo secar (ropa ya lavada): Sólo Secado, modo, centrifugado previo y paso a paso.
+  function htmlTandaSecado(t) {
+    const reg = registro.push(t) - 1;
+    const sec = SECADO[t.modo];
+    const notas = [...t.avisos.map(a => ({ ...a, cls: 'aviso' })), ...t.notas.map(n => ({ ...n, cls: 'info' }))];
+    return `<article class="tanda">
+      <header class="tanda-cab">
+        ${t.total > 1 ? `<span class="tanda-num">Secado ${t.numero} de ${t.total}</span>` : '<span class="tanda-num">Solo secar</span>'}
+        <h3>${esc(t.nombres.join(', '))}</h3>
+        <div class="tanda-meta"><span>Ya lavada</span>${t.kg !== null ? `<span>≈ ${fmtKg(t.kg)}</span>` : ''}${t.partes > 1 ? `<span>${t.partes} tandas</span>` : ''}</div>
+      </header>
+      <div class="ajustes">
+        <div class="ajuste prog"><small>Programa</small><strong>Sólo Secado</strong><small>sin lavar</small></div>
+        <div class="ajuste"><small>Modo</small><strong>${sec.icono ? icono(sec.icono, 'inline') : ''}${sec.nombre}</strong><small>máx. ${String(sec.kg).replace('.', ',')} kg</small></div>
+        <div class="ajuste"><small>Centrifugado</small><strong>${t.rpm === '-' ? 'Ninguno' : t.rpm}</strong><small>${t.rpm === '-' ? 'ya viene centrifugada' : 'rpm, antes de secar'}</small></div>
+        <div class="ajuste"><small>Productos</small><strong>Ninguno</strong><small>sin detergente</small></div>
+      </div>
+      <details class="bloque" open><summary>Paso a paso en la lavadora ${pag(34)}</summary>
+        <ol class="pasos">${t.pasos.map(x => `<li>${conIconos(x)}</li>`).join('')}</ol>
+      </details>
+      <details class="bloque"><summary>Antes de secar ${general}</summary><ul class="lista">${t.prep.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>
+      ${notas.length ? `<div class="en-cuenta"><h4>Ten en cuenta</h4><ul>${notas.map(n => `<li class="${n.cls}">${icono(n.cls === 'aviso' ? 'alerta' : 'info')}<p>${esc(n.txt)} ${n.manual ? pag(n.manual) : general}</p></li>`).join('')}</ul></div>` : ''}
+      ${t.alternativas.length ? `<div class="alternativas">${t.alternativas.map(a => `<p>${icono('flecha', 'inline')}${esc(a)}</p>`).join('')}</div>` : ''}
+      <footer class="tanda-pie">
+        <button class="btn sec" data-ver-panel="${reg}">${icono('panel')} Ver cómo queda el panel</button>
+      </footer>
+    </article>`;
   }
 
   function htmlVeredictos(veredictos) {
@@ -51,6 +84,21 @@
     return `<details class="bloque" open><summary>Secado: qué va a la máquina</summary>${htmlVeredictos(s.veredictos)}${plan}${extras}</details>`;
   }
 
+  // Pediste secar en la máquina, pero hay telas que no lo aguantan: se avisa arriba de la tarjeta.
+  function htmlAlertaSecado(a, soloSecar = false) {
+    const n = a.items.length;
+    const pie = a.todas
+      ? (n > 1 ? 'Tiéndelas.' : 'Tiéndela.')
+      : soloSecar
+        ? `${n > 1 ? 'Apártalas' : 'Apártala'} antes de meter el resto y ${n > 1 ? 'tiéndelas' : 'tiéndela'}. Lo demás sí va a la secadora.`
+        : `Lava todo junto, pero ${n > 1 ? 'sácalas' : 'sácala'} antes de secar y ${n > 1 ? 'tiéndelas' : 'tiéndela'}. El resto sí va a la secadora.`;
+    return `<div class="alerta-secado" role="alert">
+      <div class="alerta-cab">${icono('alerta')}<b>${a.todas ? 'No conviene secar en la máquina' : 'No todo va a la secadora'}</b></div>
+      <ul>${a.items.map(v => `<li><b>${esc(v.nombre)}:</b> ${esc(v.txt)}</li>`).join('')}</ul>
+      <p>${pie}</p>
+    </div>`;
+  }
+
   function htmlTanda(t) {
     const p = PROGRAMAS[t.prog];
     const reg = registro.push(t) - 1;
@@ -62,7 +110,8 @@
     } else if (s.pedido) secTxt = '<strong>No</strong><small>Ninguna va</small>';
 
     const ops = [];
-    if (t.op.intensivo) ops.push('Intensivo');
+    if (t.op.vapor) ops.push('Vapor');
+    if (t.op.turbo) ops.push('TurboWash');
     if (t.op.prelavado) ops.push('Pre-Lavado');
     if (t.op.enjuague) ops.push('Enjuague+');
 
@@ -76,6 +125,7 @@
         <h3>${esc(t.nombres.join(', '))}</h3>
         <div class="tanda-meta">${t.colorTxt ? `<span>${esc(t.colorTxt)}</span>` : ''}${t.kg !== null ? `<span>≈ ${fmtKg(t.kg)}</span>` : ''}</div>
       </header>
+      ${s.alerta ? htmlAlertaSecado(s.alerta) : ''}
       <div class="ajustes">
         <div class="ajuste prog"><small>Programa</small><strong>${p.nombre}</strong><small>${p.minutos ? p.minutos + ' min' : 'máx. ' + p.cargaMax + ' kg'}</small></div>
         <div class="ajuste"><small>Temperatura</small><strong>${t.temp ? fmtT(t.temp) : '—'}</strong></div>
@@ -87,6 +137,7 @@
         <div class="prod"><span class="prod-n">Detergente</span><p>${esc(cap(pr.tipo))}. ${esc(pr.dosis)}</p></div>
         <div class="prod ${pr.suavizante.ok ? 'si' : 'no'}"><span class="prod-n">Suavizante</span><p><b>${pr.suavizante.ok ? 'Sí' : 'No'}.</b> ${esc(pr.suavizante.txt.join(' '))}</p></div>
         <div class="prod ${pr.cloro.ok ? 'si' : 'no'}"><span class="prod-n">Cloro</span><p>${esc(pr.cloro.txt)}</p></div>
+        <div class="prod ${pr.perlas.ok ? 'si' : 'no'}"><span class="prod-n">Perlas de olor</span><p><b>${pr.perlas.ok ? 'Sí.' : 'No.'}</b> ${esc(pr.perlas.txt)}</p></div>
       </div>
       <details class="bloque" open><summary>Paso a paso en la lavadora ${pag(20)}</summary>
         <ol class="pasos">${t.pasos.map(x => `<li>${conIconos(x)}</li>`).join('')}</ol>
@@ -107,6 +158,7 @@
     if (!b) return;
     Panel.cargarTanda(registro[+b.dataset.verPanel]);
     irA('panel');
+    $('#tab-panel').scrollTop = 0;
   });
 
   // ================= Asistente (chat) =================
@@ -121,6 +173,7 @@
     d.className = 'msg ' + quien;
     d.innerHTML = html;
     log.appendChild(d);
+    if (quien === 'yo') $('#btn-limpiar').hidden = false;
     desplazarChat();
     return d;
   }
@@ -141,22 +194,22 @@
     color: { txt: '¿De qué color es la ropa? Si hay varios, escríbelos (p. ej. "blanca y pasteles").', chips: [['Blanca', 'blanco'], ['Clara o pastel', 'claro'], ['De color', 'color'], ['Oscura', 'oscuro'], ['Blanca y clara', 'blanco+claro'], ['Mezclada', 'mezcla']] },
     suciedad: { txt: '¿Qué tan sucia está?', chips: [['Poco sucia', 'poca'], ['Normal', 'normal'], ['Muy sucia o con manchas', 'mucha']] },
     carga: { txt: '¿Cuánta ropa es? (O dime cuántas prendas, p. ej. "3 jeans y 5 camisetas")', chips: [['Poquita', 'pequena'], ['Medio tambor', 'media'], ['Tambor casi lleno', 'grande']] },
-    secar: { txt: '¿La secas en la lavadora?', chips: [['Sí, secar', 'si'], ['No, la tiendo', 'no']] }
+    modo: { txt: '¿Qué vas a hacer?', chips: [['Solo lavar', 'lavar'], ['Lavar y secar', 'lavarSecar'], ['Solo secar (ya está lavada)', 'secar']] }
   };
+  const NOMBRE_MODO = { lavar: 'solo lavar', lavarSecar: 'lavar y secar', secar: 'solo secar' };
 
   function aplicarSlot(slot, val) {
     if (slot === 'color') ctx.colores = val === 'mezcla' ? new Set(['blanco', 'color', 'oscuro']) : new Set(val.split('+'));
     if (slot === 'suciedad') ctx.suciedad = val;
     if (slot === 'carga') ctx.carga = val;
-    if (slot === 'secar') ctx.secar = val === 'si';
+    if (slot === 'modo') Motor.aplicarModo(ctx, val);
   }
 
-  function textoPreguntaSecar() {
+  function textoPreguntaModo() {
     const v = Motor.prendasValidas(ctx).map(it => Motor.veredictoSecado(it.id));
     const no = v.filter(x => !x.ok).map(x => x.nombre.toLowerCase());
-    if (!no.length) return '¿La secas en la lavadora? Todas estas prendas pueden ir a la secadora.';
-    if (no.length === v.length) return '¿La secas en la lavadora?';
-    return `¿La secas en la lavadora? Ojo: ${no.join(', ')} no va${no.length > 1 ? 'n' : ''} a la secadora; si dices que sí, te indico cuándo sacarl${no.length > 1 ? 'as' : 'o'} y cómo secar el resto.`;
+    if (!no.length) return '¿Qué vas a hacer? Todas estas prendas pueden ir a la secadora.';
+    return `¿Qué vas a hacer? Ojo: ${no.join(', ')} no va${no.length > 1 ? 'n' : ''} a la secadora; si vas a secar, te digo cuándo sacarl${no.length > 1 ? 'as' : 'o'} y cómo secar el resto.`;
   }
 
   function preguntar(f) {
@@ -176,7 +229,9 @@
     }
     esperando = { slot: f };
     const q = PREGUNTAS[f];
-    burbuja(`<p>${f === 'secar' ? esc(textoPreguntaSecar()) : q.txt}</p>`, 'bot');
+    const txt = f === 'modo' ? esc(textoPreguntaModo())
+      : f === 'prendas' && ctx.modo === 'secar' ? '¿Qué vas a secar? Por ejemplo: <i>"4 toallas y 2 jeans"</i>.' : q.txt;
+    burbuja(`<p>${txt}</p>`, 'bot');
     ponerChips(q.chips.map(c => Array.isArray(c) ? {
       label: c[0], accion: () => { burbuja(esc(c[0]), 'yo'); aplicarSlot(f, c[1]); esperando = null; seguir(); }
     } : c));
@@ -187,21 +242,22 @@
     if (f) return preguntar(f);
     esperando = null;
     const res = Motor.recomendar(ctx);
+    const secando = ctx.modo === 'secar';
     const resumen = [];
-    if (ctx.colores.size) resumen.push('ropa ' + [...ctx.colores].map(c => Motor.NOMBRE_COLOR[c]).join(' y '));
-    if (ctx.suciedad) resumen.push({ poca: 'poco sucia', normal: 'suciedad normal', mucha: 'muy sucia' }[ctx.suciedad]);
+    if (ctx.modo) resumen.push(NOMBRE_MODO[ctx.modo]);
+    if (!secando && ctx.colores.size) resumen.push('ropa ' + [...ctx.colores].map(c => Motor.NOMBRE_COLOR[c]).join(' y '));
+    if (!secando && ctx.suciedad) resumen.push({ poca: 'poco sucia', normal: 'suciedad normal', mucha: 'muy sucia' }[ctx.suciedad]);
     if (ctx.carga) resumen.push('carga ' + Motor.NOMBRE_CARGA[ctx.carga]);
-    if (ctx.secar !== null) resumen.push(ctx.secar ? 'secar en la máquina' : 'sin secadora');
-    burbuja(`<p>Listo${resumen.length ? ` (${esc(resumen.join(', '))})` : ''}. Así configuras la lavadora:</p>${htmlResultado(res)}`, 'bot ancho');
+    burbuja(`<p>Listo${resumen.length ? ` (${esc(resumen.join(', '))})` : ''}. ${secando ? 'Así la secas' : 'Así configuras la lavadora'}:</p>${htmlResultado(res)}`, 'bot ancho');
     const chips = [{ label: 'Nueva consulta', accion: () => { ctx = Motor.nuevoContexto(); burbuja('Nueva consulta', 'yo'); preguntar('prendas'); } }];
     if (res.colores.hayMezcla && res.colores.juntas) chips.push({ label: 'Mejor en cargas separadas', accion: () => { burbuja('Mejor en cargas separadas', 'yo'); ctx.flags.add('separarColores'); seguir(); } });
     if (res.colores.separadoAMano) chips.push({ label: 'Juntarlas en una carga', accion: () => { burbuja('Juntarlas en una carga', 'yo'); ctx.flags.delete('separarColores'); seguir(); } });
-    chips.push(
-      { label: ctx.secar ? 'Mejor sin secar' : 'Quiero secarla', accion: () => { burbuja(ctx.secar ? 'Mejor sin secar' : 'Quiero secarla', 'yo'); ctx.secar = !ctx.secar; seguir(); } },
-      { label: 'Cambiar color', accion: () => preguntar('color') },
-      { label: 'Cambiar suciedad', accion: () => preguntar('suciedad') },
-      { label: 'Cambiar cantidad', accion: () => preguntar('carga') }
-    );
+    // Cambiar entre solo lavar, lavar y secar, y solo secar sin repetir la consulta.
+    PREGUNTAS.modo.chips.filter(([, m]) => m !== ctx.modo).forEach(([label, m]) => chips.push({
+      label: label.replace(' (ya está lavada)', ''), accion: () => { burbuja(esc(label), 'yo'); Motor.aplicarModo(ctx, m); seguir(); }
+    }));
+    if (!secando) chips.push({ label: 'Cambiar color', accion: () => preguntar('color') }, { label: 'Cambiar suciedad', accion: () => preguntar('suciedad') });
+    chips.push({ label: 'Cambiar cantidad', accion: () => preguntar('carga') });
     ponerChips(chips);
   }
 
@@ -219,8 +275,9 @@
     if (r.flags.has('preguntaSecado') && ids.length) {
       out.push(`<p><b>¿Van a la secadora?</b></p>${htmlVeredictos(ids.map(id => Motor.veredictoSecado(id)))}`);
     }
-    if (r.pregunta && (r.flags.has('prodSuavizante') || r.flags.has('prodCloro')) && ids.length) {
-      const filas = Motor.respuestaProducto(ids).map(x => `<li><b>${esc(x.nombre)}</b>${r.flags.has('prodSuavizante') ? `<span class="${x.suavizante.ok ? 'si' : 'no'}">Suavizante: ${x.suavizante.ok ? 'sí' : 'no'}. ${esc(x.suavizante.txt)}</span>` : ''}${r.flags.has('prodCloro') ? `<span class="${x.cloro.ok ? 'si' : 'no'}">Cloro: ${x.cloro.ok ? 'sí' : 'no'}. ${esc(x.cloro.txt)}</span>` : ''}</li>`).join('');
+    if (r.pregunta && (r.flags.has('prodSuavizante') || r.flags.has('prodCloro') || r.flags.has('prodPerlas')) && ids.length) {
+      const fila = (x, flag, k, n) => r.flags.has(flag) ? `<span class="${x[k].ok ? 'si' : 'no'}">${n}: ${x[k].ok ? 'sí' : 'no'}. ${esc(x[k].txt)}</span>` : '';
+      const filas = Motor.respuestaProducto(ids).map(x => `<li><b>${esc(x.nombre)}</b>${fila(x, 'prodSuavizante', 'suavizante', 'Suavizante')}${fila(x, 'prodCloro', 'cloro', 'Cloro')}${fila(x, 'prodPerlas', 'perlas', 'Perlas de olor')}</li>`).join('');
       out.push(`<p><b>Productos</b> ${general}</p><ul class="productos-resp">${filas}</ul>`);
     }
     if (r.flags.has('preguntaMezcla')) {
@@ -261,6 +318,12 @@
 
     const r = Motor.leer(texto);
     const g = Motor.buscarGuia(texto);
+    // "Ya está lavada, solo quiero secar": cambia el modo de la consulta en curso, o empieza una nueva.
+    if (r.modo && !r.prendas.length && (ctx.prendas.length || !g.pregunta)) {
+      if (ctx.prendas.length) { Motor.fusionar(ctx, r); return setTimeout(seguir, 120); }
+      ctx = Motor.fusionar(Motor.nuevoContexto(), r);
+      return setTimeout(() => preguntar('prendas'), 120);
+    }
     // Solo pregunta (¿se secan?, ¿suavizante?) sin pedir configuración: respondo sobre esas prendas y ofrezco seguir.
     const deLoPreguntado = Motor.fusionar(Motor.nuevoContexto(), r);
     const directasSolas = r.prendas.length ? respuestasDirectas(r, deLoPreguntado) : [];
@@ -288,7 +351,8 @@
 
     if (!r.prendas.length && (g.mejor >= 10 || (g.pregunta && g.mejor >= 2))) return setTimeout(() => responderGuia(g.resultados), 120);
     if (r.prendas.length) {
-      const nuevo = Motor.fusionar(Motor.nuevoContexto(), r);
+      // Si respondía a "¿Qué vas a secar?", conserva lo ya dicho (por ejemplo, que solo va a secar).
+      const nuevo = Motor.fusionar(ctx.prendas.length ? Motor.nuevoContexto() : ctx, r);
       const directas = respuestasDirectas(r, nuevo);
       ctx = nuevo;
       if (g.mejor >= 10) setTimeout(() => responderGuia(g.resultados.slice(0, 1)), 60);
@@ -323,15 +387,17 @@
   });
 
   function saludo() {
-    burbuja('<p>¡Hola! Soy la guía de tu lavasecadora LG (14 kg lavado / 8 kg secado). Cuéntame qué vas a lavar y te digo cómo configurarla: programa, temperatura, centrifugado, secado, opciones y productos.</p><p class="sutil">También respondo si una prenda va a la secadora, qué colores se pueden mezclar, o qué es un botón, un ícono o un error. Todo funciona sin internet.</p>', 'bot');
+    burbuja('<p>¡Hola! Soy la guía de tu lavasecadora LG (14 kg lavado / 8 kg secado). Cuéntame qué vas a lavar o secar y te digo cómo configurarla: solo lavar, lavar y secar, o solo secar ropa ya lavada.</p><p class="sutil">También respondo si una prenda va a la secadora, qué colores se pueden mezclar, o qué es un botón, un ícono o un error. Todo funciona sin internet.</p>', 'bot');
     ponerChips([
       { label: '4 toallas blancas muy sucias, y secarlas' },
+      { label: 'Ya están lavadas: solo secar 4 toallas y 2 jeans' },
       { label: 'Blanca y pasteles, ¿juntas o separadas?' },
       { label: '¿Las toallas se pueden secar?' },
       { label: 'Sábanas blancas de 500 hilos' },
-      { label: '¿Qué es el candado?' },
-      { label: 'Error UE' }
+      { label: '¿Cuándo echo las perlas de olor?' },
+      { label: '¿Cómo activo el Pre-Lavado?' }
     ]);
+    $('#btn-limpiar').hidden = true;
   }
   // Limpia la conversación: con el botón, o al volver a la app después de un rato.
   function limpiarChat() {
@@ -352,7 +418,7 @@
   saludo();
 
   // ================= Filtros =================
-  const F = { prendas: new Set(), colores: new Set(['color']), suciedad: 'normal', carga: 'media', secar: false, prisa: false, alergia: false, planchar: false, separarColores: false };
+  const F = { prendas: new Set(), modo: 'lavar', colores: new Set(['color']), suciedad: 'normal', carga: 'media', prisa: false, alergia: false, planchar: false, separarColores: false, mojada: false };
   function construirFiltros() {
     const lista = PRENDAS.filter(p => !p.variantes);
     $('#f-prendas').innerHTML = lista.map(p => `<button type="button" class="chip-prenda" data-id="${p.id}" aria-pressed="false"><span class="emo">${p.emoji}</span>${esc(p.nombre)}</button>`).join('');
@@ -394,6 +460,8 @@
   function actualizarFiltros() {
     const n = F.prendas.size;
     $('#f-cuenta').textContent = n ? `${n} seleccionada${n > 1 ? 's' : ''}` : 'Ninguna seleccionada';
+    // Solo secar: sin color ni suciedad; aparece "viene muy mojada" para el centrifugado previo.
+    $('#tab-filtros').classList.toggle('modo-secar', F.modo === 'secar');
     const out = $('#f-resultado');
     if (!n) { out.innerHTML = '<p class="vacio">Elige una o varias prendas para ver la configuración.</p>'; return; }
     const c = Motor.nuevoContexto();
@@ -401,16 +469,46 @@
     c.colores = new Set(F.colores);
     c.suciedad = F.suciedad;
     c.carga = F.carga;
-    c.secar = F.secar;
-    ['prisa', 'alergia', 'planchar', 'separarColores'].forEach(k => F[k] && c.flags.add(k));
+    Motor.aplicarModo(c, F.modo);
+    ['prisa', 'alergia', 'planchar', 'separarColores', 'mojada'].forEach(k => F[k] && c.flags.add(k));
     out.innerHTML = htmlResultado(Motor.recomendar(c));
   }
 
   // ================= Guía =================
+  // Gaveta del detergente vista desde arriba (manual p. 26): principal a la izquierda;
+  // a la derecha, suavizante atrás y prelavado adelante. "marcar" resalta un compartimento.
+  function dibujoGaveta(marcar = null, grande = false) {
+    const c = pos => `comp ${pos}${marcar === pos ? ' marcado' : ''}`;
+    if (!grande) {
+      return `<svg class="ico gaveta-mini" viewBox="0 0 24 24" aria-hidden="true">
+        <rect class="${c('principal')}" x="3" y="3" width="9" height="13" rx="1.6"/>
+        <rect class="${c('suavizante')}" x="13.4" y="3" width="7.6" height="6" rx="1.4"/>
+        <rect class="${c('prelavado')}" x="13.4" y="10" width="7.6" height="6" rx="1.4"/>
+        <rect class="frente" x="2" y="17.4" width="20" height="3.6" rx="1.2"/>
+      </svg>`;
+    }
+    const num = (x, y, n) => `<g class="num"><circle cx="${x}" cy="${y}" r="8"/><text x="${x}" y="${y + 4}" text-anchor="middle">${n}</text></g>`;
+    return `<svg class="gaveta-grande" viewBox="0 0 320 200" role="img" aria-label="Gaveta vista desde arriba: a la izquierda el compartimento principal; a la derecha, atrás el de suavizante y adelante el de prelavado.">
+      <rect class="cuerpo" x="12" y="8" width="296" height="146" rx="14"/>
+      <rect class="${c('principal')}" x="24" y="20" width="158" height="122" rx="10"/>
+      <rect class="${c('suavizante')}" x="192" y="20" width="104" height="58" rx="10"/>
+      <rect class="${c('prelavado')}" x="192" y="86" width="104" height="56" rx="10"/>
+      ${num(38, 34, 1)}${num(205, 33, 3)}${num(205, 99, 2)}
+      <text class="nom" x="103" y="84" text-anchor="middle">Principal</text>
+      <text class="sub" x="103" y="102" text-anchor="middle">detergente · cloro</text>
+      <text class="nom chico" x="253" y="54" text-anchor="middle">Suavizante</text>
+      <text class="sub" x="250" y="69" text-anchor="middle">flor · línea MAX</text>
+      <text class="nom chico" x="253" y="120" text-anchor="middle">Prelavado</text>
+      <text class="sub" x="250" y="135" text-anchor="middle">con Pre-Lavado</text>
+      <rect class="frente" x="4" y="160" width="312" height="34" rx="10"/>
+      <text class="frente-t" x="160" y="182" text-anchor="middle">Frente de la gaveta (de aquí la halas)</text>
+    </svg>`;
+  }
+
   function htmlGuia(tipo, x) {
     switch (tipo) {
       case 'boton': return `
-        <h4>${esc(x.nombre)} ${pag(x.pag)}</h4>
+        <h4>${esc(x.nombre)} ${pag(x.pag)} ${x.duda ? duda : ''}</h4>
         <p><b>Toque:</b> ${esc(x.toque)}</p>
         ${x.mantener ? `<p class="secreto"><b>Mantener 3 s:</b> ${esc(x.mantener)}</p>` : ''}
         ${x.combo ? `<p class="secreto"><b>Combinación:</b> ${esc(x.combo)}</p>` : ''}
@@ -432,12 +530,15 @@
         return `<h4>${esc(x.nombre)} ${x.vapor ? '<span class="etq">Vapor</span>' : ''} ${pag(x.pag)}</h4>
           <p>${esc(x.desc)}</p>
           <dl class="datos"><dt>Temperatura</dt><dd>${t}</dd><dt>Centrifugado</dt><dd>${r}</dd><dt>Carga máx.</dt><dd>${x.cargaMax ? x.cargaMax + ' kg' : '—'}</dd>${x.minutos ? `<dt>Duración</dt><dd>${x.minutos} min</dd>` : ''}</dl>
-          ${x.temp || x.rpm ? `<p class="ops-prog">Intensivo ${ck(o.intensivo)} · Pre-Lavado ${ck(o.prelavado)} · Enjuague+ ${ck(o.enjuague)} · Secado ${ck(o.secado)}</p>` : ''}
+          ${x.temp || x.rpm ? `<p class="ops-prog">Vapor ${ck(o.vapor)} · TurboWash ${ck(o.turbo)} · Pre-Lavado ${ck(o.prelavado)} · Enjuague+ ${ck(o.enjuague)} · Secado ${ck(o.secado)}</p>` : ''}
           <p class="sutil">Úsalo para: ${esc(x.usos)}</p>${x.nota ? `<p class="sutil">${esc(x.nota)}</p>` : ''}${x.ai ? '<p class="sutil">Usa AI DD (detección de carga).</p>' : ''}`;
       }
-      case 'secado': return `<div class="fila-ico"><span class="ico-pantalla">${x.icono ? icono(x.icono) : '<b class="lcd-mini">0:30</b>'}</span><div><h4>${esc(x.nombre)} ${pag(33)}</h4><p>${esc(x.desc)}</p><p class="sutil">Carga máx.: ${String(x.kg).replace('.', ',')} kg</p>${x.icono ? '' : `<p class="sutil">No tiene ícono propio en la pantalla. ${duda}</p>`}</div></div>`;
-      case 'funcion': return `<div class="fila-ico"><span class="ico-pantalla">${x.icono ? icono(x.icono) : icono('mano')}</span><div><h4>${esc(x.nombre)} ${pag(x.pag)}</h4><p class="secreto"><b>Cómo:</b> ${esc(x.como)}</p><p>${esc(x.desc)}</p></div></div>`;
-      case 'disp': return `<h4>${esc(x.nombre)} ${pag(x.pag)}</h4><p>${esc(x.desc)}</p>`;
+      case 'secado': return `<div class="fila-ico"><span class="ico-pantalla">${x.icono ? icono(x.icono) : '<b class="lcd-mini">0:30</b>'}</span><div><h4>${esc(x.nombre)} ${pag(x.pag || 33)} ${x.duda ? duda : ''}</h4><p>${esc(x.desc)}</p>${x.kg ? `<p class="sutil">Carga máx.: ${String(x.kg).replace('.', ',')} kg</p>` : ''}${x.icono ? '' : `<p class="sutil">No tiene ícono propio: la pantalla muestra el tiempo. ${duda}</p>`}</div></div>`;
+      case 'funcion': return `<div class="fila-ico"><span class="ico-pantalla">${x.icono ? icono(x.icono) : x.lcd ? `<b class="lcd-mini">${esc(x.lcd)}</b>` : icono('mano')}</span><div><h4>${esc(x.nombre)} ${pag(x.pag)} ${x.duda ? duda : ''}</h4><p class="secreto"><b>Cómo:</b> ${esc(x.como)}</p><p>${esc(x.desc)}</p></div></div>`;
+      case 'disp': {
+        const ico = x.icono ? icono(x.icono) : x.pos === 'tambor' ? icono('tambor') : x.pos ? dibujoGaveta(x.pos) : icono('gaveta');
+        return `<div class="fila-ico"><span class="ico-pantalla">${ico}</span><div><h4>${x.num ? `<span class="num-comp">${x.num}</span>` : ''}${esc(x.nombre)} ${x.general ? general : pag(x.pag)}</h4><p>${esc(x.desc)}</p>${x.lista ? `<ul class="lista">${x.lista.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}</div></div>`;
+      }
       case 'mant': return `<h4>${esc(x.nombre)} ${pag(x.pag)}</h4><p class="sutil">${esc(x.cada)}</p><ol class="lista">${x.pasos.map(p => `<li>${esc(p)}</li>`).join('')}</ol>`;
       case 'mezcla': return `<div class="fila-ico"><span class="par-colores"><i class="c-${x.a}"></i><i class="c-${x.b}"></i></span><div><h4>${cap(Motor.NOMBRE_COLOR[x.a])} + ${Motor.NOMBRE_COLOR[x.b]} ${general}</h4><p class="etq ${x.ok ? 'usuario' : 'servicio'}">${x.ok ? 'Pueden ir juntas' : 'Mejor aparte'}</p><p>${esc(x.txt)}</p></div></div>`;
       case 'consejo': return `<h4>${esc(x.titulo)} ${x.manual ? pag(x.manual) : general}</h4><p>${esc(x.txt)}</p>`;
@@ -447,31 +548,49 @@
   }
 
   const SECCIONES_GUIA = [
-    { id: 'consejos', titulo: 'Consejos para cuidar la ropa', desc: 'Lo básico para que la ropa dure y salga limpia.', tipo: 'consejo', items: () => CONSEJOS },
-    { id: 'colores', titulo: '¿Qué colores puedo lavar juntos?', desc: 'Blancos, claros, colores y oscuros: qué se mezcla y qué no.', tipo: 'mezcla', items: () => MEZCLA_COLORES },
-    { id: 'trucos', titulo: 'Funciones escondidas y trucos', desc: 'Lo que hacen los botones al mantenerlos 3 s o al combinarlos.', tipo: 'funcion', items: () => FUNCIONES },
-    { id: 'botones', titulo: 'Botones', desc: 'Qué hace cada botón según el momento en que lo presionas.', tipo: 'boton', items: () => BOTONES },
-    { id: 'iconos', titulo: 'Íconos de la pantalla', desc: 'Qué significa cada ícono iluminado.', tipo: 'icono', items: () => ICONOS_PANTALLA },
-    { id: 'mensajes', titulo: 'Mensajes y códigos de error', desc: 'Lo que aparece en los números de la pantalla.', tipo: 'mensaje', items: () => MENSAJES },
-    { id: 'programas', titulo: 'Programas de la perilla', desc: 'Temperatura, centrifugado, carga y opciones de cada uno.', tipo: 'programa', items: () => Object.entries(PROGRAMAS).map(([id, p]) => ({ id, ...p })) },
-    { id: 'secado', titulo: 'Modos de secado', desc: 'Las opciones que recorre el botón Secado.', tipo: 'secado', items: () => Object.values(SECADO) },
-    { id: 'dispensador', titulo: 'Detergente, suavizante y dispensador', desc: 'Dónde va cada producto y cuánto poner.', tipo: 'disp', items: () => DISPENSADOR },
-    { id: 'etiquetas', titulo: 'Símbolos de las etiquetas', desc: 'Qué dice la etiqueta de la prenda y cómo traducirlo a la lavadora.', tipo: 'etiqueta', items: () => ETIQUETAS },
-    { id: 'mantenimiento', titulo: 'Mantenimiento', desc: 'Limpiezas y cada cuánto hacerlas.', tipo: 'mant', items: () => MANTENIMIENTO }
+    { id: 'consejos', titulo: 'Consejos para cuidar la ropa', ico: icono('consejo'), tipo: 'consejo', items: () => CONSEJOS },
+    { id: 'colores', titulo: '¿Qué colores puedo lavar juntos?', ico: '<span class="par-colores"><i class="c-blanco"></i><i class="c-color"></i></span>', tipo: 'mezcla', items: () => MEZCLA_COLORES },
+    { id: 'trucos', titulo: 'Funciones escondidas y trucos', ico: icono('mano'), tipo: 'funcion', items: () => FUNCIONES },
+    { id: 'botones', titulo: 'Botones', ico: icono('panel'), tipo: 'boton', items: () => BOTONES },
+    { id: 'iconos', titulo: 'Íconos de la pantalla', ico: icono('ai'), tipo: 'icono', items: () => ICONOS_PANTALLA },
+    { id: 'mensajes', titulo: 'Mensajes y códigos de error', ico: '<b class="sec-lcd">UE</b>', tipo: 'mensaje', items: () => MENSAJES },
+    {
+      id: 'programas', titulo: 'Programas de la perilla', ico: icono('perilla'), tipo: 'programa', items: () => Object.entries(PROGRAMAS).map(([id, p]) => ({ id, ...p })),
+      intro: `<p class="sutil">Vapor y TurboWash no salen en el manual (es de otro panel): lo que dice cada programa sobre ellos es deducido. Si la luz del botón no enciende, ese programa no lo admite. ${duda}</p>`
+    },
+    { id: 'secado', titulo: 'Modos de secado', ico: icono('secNormal'), tipo: 'secado', items: () => [...Object.values(SECADO), ECOHYBRID] },
+    {
+      id: 'dispensador', titulo: 'Detergente, suavizante y dispensador', ico: icono('gaveta'), tipo: 'disp', items: () => DISPENSADOR,
+      intro: `${dibujoGaveta(null, true)}<p class="sutil">Así se ve la gaveta al sacarla (manual p. 26). Las cápsulas y las perlas de olor no van aquí: van directo al tambor, antes de la ropa.</p>`
+    },
+    { id: 'etiquetas', titulo: 'Símbolos de las etiquetas', ico: simboloEtiqueta({ t: 'lavado', temp: '40' }), tipo: 'etiqueta', items: () => ETIQUETAS },
+    { id: 'mantenimiento', titulo: 'Mantenimiento', ico: icono('llave'), tipo: 'mant', items: () => MANTENIMIENTO }
   ];
+  let filtrando = false;
   function construirGuia() {
     const cont = $('#guia-secciones');
     cont.innerHTML = SECCIONES_GUIA.map(s => `
-      <details class="seccion" data-sec="${s.id}" ${s.id === 'trucos' ? 'open' : ''}>
-        <summary><span><b>${s.titulo}</b><small>${s.desc}</small></span></summary>
-        <div class="seccion-cuerpo">${s.items().map(x => `<div class="guia-item" data-texto="${esc(Motor.norm(textoPlano(htmlGuia(s.tipo, x)) + ' ' + [x.cod, ...(x.alias || []), ...(x.claves || [])].filter(Boolean).join(' ')))}">${htmlGuia(s.tipo, x)}</div>`).join('')}</div>
+      <details class="seccion" data-sec="${s.id}">
+        <summary><span class="sec-ico">${s.ico}</span><b>${s.titulo}</b></summary>
+        <div class="seccion-cuerpo">${s.intro ? `<div class="guia-intro">${s.intro}</div>` : ''}${s.items().map(x => `<div class="guia-item" data-texto="${esc(Motor.norm(textoPlano(htmlGuia(s.tipo, x)) + ' ' + [x.cod, ...(x.alias || []), ...(x.claves || [])].filter(Boolean).join(' ')))}">${htmlGuia(s.tipo, x)}</div>`).join('')}</div>
       </details>`).join('');
+    // Acordeón: al abrir una sección se cierran las demás; su título queda fijo arriba mientras lees.
+    $$('.seccion', cont).forEach(sec => sec.addEventListener('toggle', () => {
+      if (filtrando) return;
+      if (sec.open) {
+        $$('.seccion[open]', cont).forEach(o => { if (o !== sec) o.open = false; });
+        requestAnimationFrame(() => sec.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+      } else if (!$('.seccion[open]', cont) && sec.getBoundingClientRect().top < 0) {
+        sec.scrollIntoView({ block: 'start' });
+      }
+    }));
     $('#guia-buscar').addEventListener('input', e => filtrarGuia(e.target.value));
   }
   const textoPlano = html => html.replace(/<[^>]+>/g, ' ');
   function filtrarGuia(q) {
     const n = Motor.norm(q);
     let total = 0;
+    filtrando = true;
     $$('#guia-secciones .seccion').forEach(sec => {
       let vis = 0;
       $$('.guia-item', sec).forEach(it => {
@@ -481,54 +600,79 @@
         it.hidden = !ok;
         if (ok) vis++;
       });
+      $$('.guia-intro', sec).forEach(i => { i.hidden = !!n; });
       sec.hidden = n && !vis;
-      if (n) sec.open = vis > 0;
+      sec.open = !!n && vis > 0;
       total += vis;
     });
     $('#guia-vacio').hidden = !n || total > 0;
+    // Los eventos "toggle" llegan después: hasta entonces no aplica el acordeón.
+    setTimeout(() => { filtrando = false; }, 60);
   }
 
+  // ================= Aviso flotante (encima de la barra de pestañas) =================
+  const toast = $('#toast');
+  let toastTimer = null;
+  function mostrarToast(html, { ms = 5000, accion = null } = {}) {
+    toast.innerHTML = html;
+    toast.hidden = false;
+    toast.onclick = () => { ocultarToast(); if (accion) accion(); };
+    clearTimeout(toastTimer);
+    if (ms) toastTimer = setTimeout(ocultarToast, ms);
+  }
+  function ocultarToast() { toast.hidden = true; clearTimeout(toastTimer); }
+
   // ================= Panel virtual =================
+  // Réplica del panel real (según la foto): pantalla, luces, cinco botones con su función escondida (*) y combinaciones.
   const Panel = (() => {
     const AI_PROGS = ['algodon', 'mixtos', 'sintetico'];
-    const S = { on: false, modo: 'apagada', prog: null, temp: null, rpm: null, int: false, pre: false, enj: false, sec: null, dif: 0, sonidoOff: false, bloqueo: false, wifi: false, remoto: false, corriendo: false, pausa: false, fases: [], fase: -1, pantalla: '', parpadeo: false, explicar: false };
-    let msg = { txt: 'Presiona <b>Encendido</b> para empezar. Prueba las combinaciones: mantén presionado un botón para su función escondida.', ref: '' };
+    const CICLO = { prog: null, temp: null, rpm: null, vapor: false, turbo: false, pre: false, enj: false, anti: false, sec: null, eco: false, dif: 0, corriendo: false, pausa: false, fases: [], fase: -1, pantalla: '', remoto: false };
+    const S = { on: false, modo: 'apagada', ...CICLO, sonidoOff: false, bloqueo: false, wifi: false, explicar: false };
+    let msg = { txt: 'Presiona <b>Encendido</b> para empezar. Las funciones con <b>*</b> se activan manteniendo el botón: en tu lavadora 3 s, aquí basta un segundo.', ref: '' };
+    let ultimoMsg = null;
+    let msgAbierto = false;
     let timer = null;
 
     const prog = () => (S.prog ? PROGRAMAS[S.prog] : null);
     const decir = (txt, ref = '') => { msg = { txt, ref }; };
     const nombreSec = k => SECADO[k].nombre;
+    const conDuda = ref => `${ref} ${duda}`;
 
     function encender() {
-      Object.assign(S, { on: true, modo: 'inicial', prog: 'algodon', int: false, pre: false, enj: false, sec: null, dif: 0, corriendo: false, pausa: false, fases: [], fase: -1, pantalla: '', remoto: false });
+      Object.assign(S, { on: true, modo: 'inicial', ...CICLO, prog: 'algodon' });
       S.temp = PROGRAMAS.algodon.temp.def; S.rpm = PROGRAMAS.algodon.rpm.def;
       decir('Encendida. Se ilumina Algodón con sus ajustes predeterminados (40 °C, 1400 rpm). Si ahora presionas <b>Secado</b> o <b>Centrifugado</b> sin girar la perilla, entras en Sólo Secado o Sólo Centrifugado.' + (S.bloqueo ? ' Ojo: el bloqueo infantil sigue activo (CL).' : ''), pag(22) + ' ' + pag(34));
     }
     function apagar() {
       clearTimeout(timer);
-      Object.assign(S, { on: false, modo: 'apagada', prog: null, temp: null, rpm: null, int: false, pre: false, enj: false, sec: null, dif: 0, corriendo: false, pausa: false, fases: [], fase: -1, pantalla: '', remoto: false });
-      decir('Apagada. Se pierde la configuración. El bloqueo infantil y el sonido conservan su estado aunque la apagues.', pag(36));
+      Object.assign(S, { on: false, modo: 'apagada', ...CICLO });
+      decir('Apagada. Se pierde la configuración. El bloqueo infantil y los avisos sonoros conservan su estado aunque la apagues.', pag(36));
     }
     function elegir(id) {
       const p = PROGRAMAS[id];
-      Object.assign(S, { modo: id === 'soloSecado' ? 'soloSecado' : 'programa', prog: id, int: false, pre: false, enj: false, dif: 0 });
+      Object.assign(S, { modo: id === 'soloSecado' ? 'soloSecado' : 'programa', prog: id, vapor: false, turbo: false, pre: false, enj: false, anti: false, eco: false, dif: 0 });
       S.temp = p.temp ? p.temp.def : null;
       S.rpm = p.rpm ? p.rpm.def : null;
       S.sec = p.op.secado === 'auto' ? 'normal' : null;
       const o = p.op;
-      const ops = [o.intensivo && 'Intensivo', o.prelavado && 'Pre-Lavado', o.enjuague && 'Enjuague+', o.secado === true && 'Secado'].filter(Boolean);
-      decir(`<b>${p.nombre}</b>: ${esc(p.desc)} ${p.temp ? `Temperatura ${fmtT(p.temp.def)}${p.temp.disp.length > 1 ? ` (puedes ${fmtT(p.temp.disp[0])}–${fmtT(p.temp.disp[p.temp.disp.length - 1])})` : ' fija'}.` : ''} ${p.rpm ? `Centrifugado ${p.rpm.def === '-' ? 'ninguno' : p.rpm.def}.` : ''} ${p.cargaMax ? `Máx. ${p.cargaMax} kg.` : ''} ${ops.length ? 'Opciones: ' + ops.join(', ') + '.' : ''}${o.secado === 'auto' ? ' El secado viene incluido.' : o.secado === false && p.temp ? ' Secado no disponible.' : ''}`, pag(p.pag));
+      const ops = [o.vapor === true && 'Vapor', o.turbo === true && 'TurboWash', o.prelavado && 'Pre-Lavado', o.enjuague && 'Enjuague+', o.secado === true && 'Secado'].filter(Boolean);
+      decir(`<b>${p.nombre}</b>: ${esc(p.desc)} ${p.temp ? `Temperatura ${fmtT(p.temp.def)}${p.temp.disp.length > 1 ? ` (puedes ${fmtT(p.temp.disp[0])}–${fmtT(p.temp.disp[p.temp.disp.length - 1])})` : ' fija'}.` : ''} ${p.rpm ? `Centrifugado ${p.rpm.def === '-' ? 'ninguno' : p.rpm.def}.` : ''} ${p.cargaMax ? `Máx. ${p.cargaMax} kg.` : ''} ${ops.length ? 'Opciones: ' + ops.join(', ') + '.' : ''}${o.vapor === 'auto' ? ' Ya incluye vapor.' : ''}${o.secado === 'auto' ? ' El secado viene incluido.' : o.secado === false && p.temp ? ' Secado no disponible.' : ''}`, pag(p.pag));
     }
 
     function bloqueado() {
       if (!S.on) { decir('Primero presiona <b>Encendido</b>.'); return true; }
-      if (S.bloqueo) { decir('Bloqueo infantil activo: la pantalla muestra <b>CL</b> y solo funciona Encendido. Para quitarlo: mantén Tiempo Diferido y Añadir Elemento juntos 3 s.', pag(36)); flashCL(); return true; }
+      if (S.bloqueo) { decir('Bloqueo infantil activo: la pantalla muestra <b>CL</b> y solo funciona Encendido. Para quitarlo: mantén <b>Retrasar fin</b> y <b>Añadir elemento</b> juntos 3 s.', pag('panel')); flashCL(); return true; }
       return false;
     }
     function flashCL() { S.pantalla = 'CL'; render(); clearTimeout(timer); timer = setTimeout(() => { S.pantalla = ''; render(); }, 1200); }
     function enMarcha(accion) {
       if (S.corriendo && !S.pausa) { decir(`Con el ciclo en marcha no se cambia ${accion}. Pausa con Inicio/Pausa o apaga para empezar de nuevo.`); return true; }
       return false;
+    }
+    function soloLavado(nombre) {
+      if (S.modo === 'programa' || S.modo === 'inicial') return false;
+      decir(`${nombre} solo aplica a programas de lavado.`);
+      return true;
     }
     function comprometerAlgodon() {
       if (S.modo === 'inicial') { S.modo = 'programa'; return ' (Al tocar un ajuste quedó elegido Algodón, el programa por defecto.)'; }
@@ -540,12 +684,12 @@
       encendido: () => (S.on ? apagar() : encender()),
       inicio() {
         if (bloqueado()) return;
-        if (S.remoto) return decir('Inicio remoto activo: el ciclo solo se puede iniciar desde la app LG ThinQ. Para quitarlo, mantén Añadir Elemento 3 s.', pag(40));
+        if (S.remoto) return decir('Inicio remoto activo: el ciclo solo se puede iniciar desde la app LG ThinQ. Para quitarlo, mantén Añadir elemento 3 s.', pag(40));
         if (S.corriendo) {
           S.pausa = !S.pausa;
-          return decir(S.pausa ? 'En pausa: el LED de la fase actual deja de parpadear.' : 'Continúa el ciclo.', pag(23));
+          return decir(S.pausa ? 'En pausa: el ícono de la fase actual deja de parpadear.' : 'Continúa el ciclo.', pag(23));
         }
-        if (S.modo === 'inicial') { S.modo = 'programa'; }
+        if (S.modo === 'inicial') S.modo = 'programa';
         if (S.modo === 'programa' && ['limpiezaTambor', 'descarga'].includes(S.prog)) S.fases = ['faseLavado', 'faseCentrifugado'];
         else if (S.modo === 'soloSecado') S.fases = ['faseSecado'];
         else if (S.modo === 'soloCentrifugado') S.fases = ['faseCentrifugado'];
@@ -562,17 +706,17 @@
         const d = prog().temp.disp;
         if (d.length === 1) return decir(`${prog().nombre} lava siempre a ${fmtT(d[0])}: el botón no cambia nada.`, pag(28));
         S.temp = ciclar(d, S.temp);
-        decir(`Temperatura: <b>${fmtT(S.temp)}</b>. En ${prog().nombre} puedes elegir: ${d.map(fmtT).join(', ')}.${extra}`, pag(34) + ' ' + duda);
+        decir(`Temperatura: <b>${fmtT(S.temp)}</b>. En ${prog().nombre} puedes elegir: ${d.map(fmtT).join(', ')}.${extra}`, pag('panel'));
       },
       temperaturaLargo() {
         if (!S.on) return decir('Primero presiona Encendido.');
-        decir('Mantener <b>Temperatura</b> 3 s (recién encendida, sin tocar nada más) inicia el <b>diagnóstico sonoro</b>: la lavadora emite tonos para que la app LG ThinQ (Smart Diagnosis) los escuche. Acerca el micrófono del celular al botón de encendido.', pag(41));
+        decir('Según el manual, mantener <b>Temperatura</b> 3 s (recién encendida, sin tocar nada más) inicia el <b>diagnóstico sonoro</b>: la lavadora emite tonos para que la app LG ThinQ (Smart Diagnosis) los escuche. Acerca el micrófono del celular al botón de encendido.', pag(41));
       },
       centrifugado() {
         if (bloqueado() || enMarcha('el centrifugado')) return;
         if (S.modo === 'inicial') {
           Object.assign(S, { modo: 'soloCentrifugado', prog: null, temp: null, rpm: '1400', sec: null });
-          return decir('Entraste en <b>Sólo Centrifugado</b> (sin girar la perilla). Sirve para exprimir ropa mojada; sin detergente. Toca de nuevo para cambiar las rpm y luego Inicio/Pausa.', pag(35) + ' ' + duda);
+          return decir('Entraste en <b>Sólo Centrifugado</b> (sin girar la perilla). Sirve para exprimir ropa mojada; sin detergente. Toca de nuevo para cambiar las rpm y luego Inicio/Pausa.', conDuda(pag(35)));
         }
         if (S.modo === 'soloCentrifugado') { S.rpm = ciclar(RPMS, S.rpm); return decir(`Sólo Centrifugado a <b>${fmtR(S.rpm)}</b>.`, pag(35)); }
         if (S.modo === 'soloSecado') {
@@ -585,16 +729,22 @@
         S.rpm = ciclar(d, S.rpm);
         decir(`Centrifugado: <b>${fmtR(S.rpm)}</b>. En ${prog().nombre}: ${d.join(', ')}.${S.rpm === 'No' ? ' Con "No" la ropa sale muy mojada.' : ''}${extra}`, pag(31));
       },
+      centrifugadoLargo() {
+        if (!S.on) return decir('Primero presiona Encendido.');
+        if (S.bloqueo) return bloqueado();
+        S.sonidoOff = !S.sonidoOff;
+        decir(S.sonidoOff ? 'Mantener <b>Centrifugado</b> 3 s: avisos sonoros <b>apagados</b>. Tu panel no tiene ícono para esto: simplemente deja de sonar.' : 'Avisos sonoros activados de nuevo (mantener Centrifugado 3 s).', pag('panel'));
+      },
       secado() {
         if (bloqueado() || enMarcha('el secado')) return;
         if (S.modo === 'inicial') {
           Object.assign(S, { modo: 'soloSecado', prog: null, temp: null, rpm: '-', sec: 'normal' });
-          return decir('Entraste en <b>Sólo Secado</b> porque no habías girado la perilla. Cada toque cambia: Normal → Tiempo 30 → 60 → 120 → Plancha → Temperatura baja → Normal Eco. No pongas detergente. Deja el grifo abierto.', pag(34));
+          return decir('Entraste en <b>Sólo Secado</b> porque no habías girado la perilla. Cada toque cambia: Normal → Tiempo 30 → 60 → 120 → Plancha → Temperatura baja. No pongas detergente. Deja el grifo abierto.', pag(34));
         }
         if (S.modo === 'soloCentrifugado') return decir('Ya estás en Sólo Centrifugado. Para secar, apaga y enciende y presiona Secado sin girar la perilla.', pag(34));
         if (S.modo === 'soloSecado') {
           S.sec = ciclar(CICLO_SECADO_SOLO, S.sec);
-          const sinIcono = !SECADO[S.sec].icono ? ` Este modo no tiene ícono propio; en el simulador mostramos el tiempo en los números. ${duda}` : '';
+          const sinIcono = !SECADO[S.sec].icono ? ` Este modo no tiene ícono propio; la pantalla muestra el tiempo. ${duda}` : '';
           return decir(`Modo de secado: <b>${nombreSec(S.sec)}</b>. ${esc(SECADO[S.sec].desc)}${sinIcono}`, pag(33));
         }
         const o = prog().op.secado;
@@ -604,49 +754,71 @@
           return decir(`${prog().nombre} siempre seca; cambiaste el modo a <b>${nombreSec(S.sec)}</b>.`, pag(30));
         }
         S.sec = ciclar(CICLO_SECADO_LAVADO, S.sec);
+        if (!S.sec) S.eco = false;
         decir(S.sec ? `Secado después del lavado: <b>${nombreSec(S.sec)}</b>. ${esc(SECADO[S.sec].desc)} Recuerda: seca máx. 8 kg.` : 'Secado desactivado: solo lavará.', pag(33) + (S.sec === null ? ' ' + duda : ''));
       },
-      intensivo() {
-        if (bloqueado() || enMarcha('las opciones')) return;
-        if (S.modo !== 'programa' && S.modo !== 'inicial') return decir('Intensivo solo aplica a programas de lavado.');
-        const extra = comprometerAlgodon();
-        if (!prog().op.intensivo) return decir(`${prog().nombre} no permite Intensivo.`, pag(30));
-        S.int = !S.int;
-        decir(S.int ? `Intensivo <b>activado</b>: lavado más fuerte para ropa con suciedad normal o abundante.${extra}` : 'Intensivo desactivado.', pag(34));
+      secadoLargo() {
+        if (bloqueado() || enMarcha('el secado')) return;
+        if (!S.sec) return decir('EcoHybrid es parte del secado: primero elige un modo con <b>Secado</b> y luego mantenlo presionado.', pag('panel'));
+        S.eco = !S.eco;
+        decir(S.eco ? 'Mantener <b>Secado</b> 3 s: <b>EcoHybrid Eco</b> {i:ecoE}. Seca casi sin agua y ahorra, pero tarda más.' : 'EcoHybrid con agua {i:ecoAgua}: usa agua para condensar el vapor y seca más rápido.', conDuda(pag('panel')));
       },
-      intensivoLargo() {
-        if (bloqueado() || enMarcha('las opciones')) return;
-        if (S.modo !== 'programa' && S.modo !== 'inicial') return decir('Pre-Lavado solo aplica a programas de lavado.');
+      vapor() {
+        if (bloqueado() || enMarcha('las opciones') || soloLavado('Vapor')) return;
         const extra = comprometerAlgodon();
-        if (!prog().op.prelavado) return decir(`${prog().nombre} no permite Pre-Lavado.`, pag(30));
-        S.pre = !S.pre;
-        decir(S.pre ? `<b>Pre-Lavado activado</b> (mantener Intensivo 3 s): se enciende {i:prelavado}. Pon detergente también en el compartimento de prelavado y no uses líquido.${extra}` : 'Pre-Lavado desactivado.', pag(36));
+        const o = prog().op.vapor;
+        if (o === 'auto') return decir(`${prog().nombre} ya incluye vapor.`, pag(28));
+        if (!o) return decir(`${prog().nombre} no admite Vapor: su luz no enciende.`, conDuda(pag('panel')));
+        S.vapor = !S.vapor;
+        decir(S.vapor ? `Vapor <b>activado</b>: se enciende la luz del botón. Ayuda con manchas, olores y alérgenos.${extra}` : 'Vapor desactivado.', conDuda(pag('panel')));
       },
-      enjuague() {
-        if (bloqueado() || enMarcha('las opciones')) return;
-        if (S.modo !== 'programa' && S.modo !== 'inicial') return decir('Enjuague+ solo aplica a programas de lavado.');
+      vaporLargo() {
+        if (bloqueado() || enMarcha('las opciones') || soloLavado('Anti arrugas')) return;
+        const extra = comprometerAlgodon();
+        S.anti = !S.anti;
+        decir(S.anti ? `Mantener <b>Vapor</b> 3 s: <b>Anti arrugas</b> {i:antiArrugas}. Al terminar, el tambor gira de vez en cuando para que la ropa no se arrugue.${extra}` : 'Anti arrugas desactivado.', conDuda(pag('panel')));
+      },
+      turbowash() {
+        if (bloqueado() || enMarcha('las opciones') || soloLavado('TurboWash')) return;
+        const extra = comprometerAlgodon();
+        const o = prog().op.turbo;
+        if (o === 'auto') return decir(`${prog().nombre} ya es un ciclo TurboWash.`, pag(28));
+        if (!o) return decir(`${prog().nombre} no admite TurboWash: su luz no enciende.`, conDuda(pag('panel')));
+        S.turbo = !S.turbo;
+        decir(S.turbo ? `TurboWash <b>activado</b>: acorta el ciclo con chorros de agua a presión.${extra}` : 'TurboWash desactivado.', conDuda(pag('panel')));
+      },
+      turbowashLargo() {
+        if (bloqueado() || enMarcha('las opciones') || soloLavado('Enjuague+')) return;
         const extra = comprometerAlgodon();
         if (!prog().op.enjuague) return decir(`${prog().nombre} no permite Enjuague+.`, pag(30));
         S.enj = !S.enj;
-        decir(S.enj ? `Enjuague+ <b>activado</b>: un enjuague extra, ideal con alergias o piel sensible.${extra}` : 'Enjuague+ desactivado.', pag(34));
+        decir(S.enj ? `Mantener <b>TurboWash</b> 3 s: <b>Enjuague+</b> {i:enjuague}. Un enjuague extra, ideal con alergias o piel sensible.${extra}` : 'Enjuague+ desactivado.', pag('panel'));
       },
-      diferido() {
-        if (bloqueado() || enMarcha('el tiempo diferido')) return;
+      comboPre: () => decir('<b>Pre-Lavado</b>: en tu lavadora mantén <b>Vapor</b> y <b>TurboWash</b> a la vez 3 s. Aquí, mantén presionada esta barra.', pag('panel')),
+      comboPreLargo() {
+        if (bloqueado() || enMarcha('las opciones') || soloLavado('Pre-Lavado')) return;
+        const extra = comprometerAlgodon();
+        if (!prog().op.prelavado) return decir(`${prog().nombre} no permite Pre-Lavado.`, pag(30));
+        S.pre = !S.pre;
+        decir(S.pre ? `<b>Pre-Lavado activado</b> (Vapor y TurboWash juntos 3 s): se enciende {i:prelavado}. Pon detergente en polvo también en el compartimento de prelavado (adelante a la derecha) y no uses líquido.${extra}` : 'Pre-Lavado desactivado.', pag('panel') + ' ' + pag(36));
+      },
+      retrasar() {
+        if (bloqueado() || enMarcha('la hora de fin')) return;
         if (S.modo === 'inicial') comprometerAlgodon();
-        if (S.modo !== 'programa') return decir('Tiempo Diferido se usa con un programa de lavado.', pag(30));
+        if (S.modo !== 'programa') return decir('Retrasar fin se usa con un programa de lavado.', pag(30));
         S.dif = S.dif ? S.dif + 1 : 3;
         if (S.dif > 19) S.dif = 0;
-        decir(S.dif ? `Terminará en <b>${S.dif} h</b> (es la hora de FIN, no de inicio). Sin detergente líquido. Para cancelarlo hay que apagar.` : 'Tiempo Diferido quitado.', pag(36) + ' ' + duda);
+        decir(S.dif ? `Terminará en <b>${S.dif} h</b> (es la hora de FIN, no de inicio). Sin detergente líquido. Para cancelarlo hay que apagar.` : 'Retrasar fin quitado.', conDuda(pag(36)));
       },
-      diferidoLargo() {
+      retrasarLargo() {
         if (!S.on) return decir('Primero presiona Encendido.');
         if (S.bloqueo) return bloqueado();
         S.wifi = !S.wifi;
-        decir(S.wifi ? 'Mantener <b>Tiempo Diferido</b> 3 s inicia la conexión Wi-Fi con LG ThinQ. Cuando se conecta, se enciende {i:wifi}. Solo redes de 2,4 GHz.' : 'Wi-Fi desconectado (en el simulador).', pag(22) + ' ' + pag(38));
+        decir(S.wifi ? 'Mantener <b>Retrasar fin</b> 3 s inicia la conexión Wi-Fi con LG ThinQ. Cuando se conecta, se enciende {i:wifi}. Solo redes de 2,4 GHz.' : 'Wi-Fi desconectado (en el simulador).', pag('panel') + ' ' + pag(38));
       },
       anadir() {
         if (bloqueado()) return;
-        if (!S.corriendo) return decir('Añadir Elemento funciona con el ciclo en marcha: pausa y desbloquea la puerta para meter o sacar ropa.', pag(36));
+        if (!S.corriendo) return decir('Añadir elemento funciona con el ciclo en marcha: pausa y desbloquea la puerta para meter o sacar ropa.', pag(36));
         if (S.fases[S.fase] === 'faseSecado') return decir('Durante el secado la ropa y la puerta están calientes. Pausa con Inicio/Pausa si necesitas sacar algo.', pag(32));
         S.pausa = true;
         decir('Pausado: cuando se apague {i:puerta} puedes abrir y agregar o sacar ropa. Si el agua está alta o caliente, la puerta no abre (seguridad). Luego cierra y presiona Inicio/Pausa.', pag(36));
@@ -654,21 +826,16 @@
       anadirLargo() {
         if (!S.on) return decir('Primero presiona Encendido.');
         if (S.bloqueo) return bloqueado();
-        if (!S.wifi) return decir('Inicio remoto necesita la lavadora conectada a LG ThinQ. Primero mantén Tiempo Diferido 3 s para conectar el Wi-Fi.', pag(40));
+        if (!S.wifi) return decir('Inicio remoto necesita la lavadora conectada a LG ThinQ. Primero mantén Retrasar fin 3 s para conectar el Wi-Fi.', pag(40));
         S.remoto = !S.remoto;
-        decir(S.remoto ? 'Mantener <b>Añadir Elemento</b> 3 s activa el <b>Inicio remoto</b> {i:remoto}: ahora solo puedes iniciar desde la app.' : 'Inicio remoto desactivado.', pag(40));
+        decir(S.remoto ? 'Mantener <b>Añadir elemento</b> 3 s activa el <b>Inicio remoto</b>: ahora solo puedes iniciar desde la app. Tu panel no tiene un ícono propio para esto.' : 'Inicio remoto desactivado.', pag('panel') + ' ' + pag(40));
       },
-      comboSonido() {
-        if (!S.on) return decir('Primero presiona Encendido.');
-        if (S.bloqueo) return bloqueado();
-        S.sonidoOff = !S.sonidoOff;
-        decir(S.sonidoOff ? '<b>Enjuague+ y Secado</b> juntos 3 s: sonidos <b>apagados</b> {i:sonidoOff}.' : 'Sonidos activados de nuevo.', pag(36));
-      },
-      comboBloqueo() {
+      comboBloqueo: () => decir('<b>Bloqueo infantil</b>: en tu lavadora mantén <b>Retrasar fin</b> y <b>Añadir elemento</b> a la vez 3 s. Aquí, mantén presionada esta barra.', pag('panel')),
+      comboBloqueoLargo() {
         if (!S.on) return decir('Primero presiona Encendido.');
         S.bloqueo = !S.bloqueo;
         if (S.bloqueo) flashCL();
-        decir(S.bloqueo ? '<b>Tiempo Diferido y Añadir Elemento</b> juntos 3 s: <b>Bloqueo infantil</b> {i:bloqueo}. Todo queda bloqueado menos Encendido; aparece CL. Apagar no lo quita.' : 'Bloqueo infantil quitado (misma combinación).', pag(36));
+        decir(S.bloqueo ? '<b>Retrasar fin y Añadir elemento</b> juntos 3 s: <b>Bloqueo infantil</b>. Todo queda bloqueado menos Encendido; la pantalla muestra CL. Apagar no lo quita.' : 'Bloqueo infantil quitado (misma combinación).', pag('panel'));
       },
       siguienteFase() {
         if (!S.corriendo) return;
@@ -678,7 +845,7 @@
         if (S.fase >= S.fases.length) {
           const seco = S.fases.includes('faseSecado');
           S.corriendo = false; S.fase = -1; S.pantalla = 'ENd';
-          decir(`Terminó: <b>ENd</b>, suena la melodía${S.sonidoOff ? ' (no, está silenciada)' : ''} y se apaga {i:puerta}.${seco ? ' Si no sacas la ropa, aparece <b>Cd</b> y el tambor la gira de vez en cuando hasta ~4 h para evitar arrugas.' : ' Saca la ropa enseguida.'}`, pag(20) + ' ' + pag(32));
+          decir(`Terminó: <b>ENd</b>, suena la melodía${S.sonidoOff ? ' (no, está silenciada)' : ''} y se apaga {i:puerta}.${seco ? ' Si no sacas la ropa, aparece <b>Cd</b> y el tambor la gira de vez en cuando hasta ~4 h para evitar arrugas.' : S.anti ? ' Con Anti arrugas, el tambor sigue girando de vez en cuando hasta que abras la puerta.' : ' Saca la ropa enseguida.'}`, pag(20) + ' ' + pag(32));
           if (seco) { clearTimeout(timer); timer = setTimeout(() => { if (S.pantalla === 'ENd') { S.pantalla = 'Cd'; render(); } }, 2500); }
           return;
         }
@@ -691,26 +858,32 @@
     // Explicaciones del modo "¿Qué es esto?"
     function explicar(clave) {
       const [tipo, id] = clave.split(':');
-      if (tipo === 'b') {
-        const b = BOTONES.find(x => x.id === id);
-        return decir(`<div class="guia-item en-panel">${htmlGuia('boton', b)}</div>`);
-      }
-      if (tipo === 'i') return decir(`<div class="guia-item en-panel">${htmlGuia('icono', ICONOS_PANTALLA.find(x => x.id === id))}</div>`);
-      if (tipo === 'p') return decir(`<div class="guia-item en-panel">${htmlGuia('programa', { id, ...PROGRAMAS[id] })}</div>`);
-      if (tipo === 'lcd') return decir('<div class="guia-item en-panel"><h4>Números de la pantalla</h4><p>Muestran el tiempo estimado restante (o el predeterminado del programa antes de iniciar), <b>---</b> mientras pesa la ropa, y mensajes como ENd, Cd, CL, tcL o códigos de error. Revisa la sección "Mensajes y códigos de error" de la guía.</p></div>', pag(24));
-      if (tipo === 't') return decir('<div class="guia-item en-panel"><h4>Luces de temperatura</h4><p>Se ilumina la temperatura elegida. Cambia con el botón Temperatura. Cada programa permite solo algunas (las marcadas con borde en el simulador).</p></div>', pag(23));
-      if (tipo === 'r') return decir('<div class="guia-item en-panel"><h4>Luces de centrifugado</h4><p>Se ilumina la velocidad elegida (rpm). Cambia con el botón Centrifugado. "No" = sin centrifugado final.</p></div>', pag(31));
+      const caja = h => decir(`<div class="guia-item en-panel">${h}</div>`);
+      if (tipo === 'b') return caja(htmlGuia('boton', BOTONES.find(x => x.id === id)));
+      if (tipo === 'i') return caja(htmlGuia('icono', ICONOS_PANTALLA.find(x => x.id === id)));
+      if (tipo === 'f') return caja(htmlGuia('funcion', FUNCIONES.find(x => x.id === id)));
+      if (tipo === 'p') return caja(htmlGuia('programa', { id, ...PROGRAMAS[id] }));
+      if (tipo === 'lcd') return caja(`<h4>Números de la pantalla ${pag(24)}</h4><p>Muestran el tiempo estimado restante (o el predeterminado del programa antes de iniciar), <b>---</b> mientras pesa la ropa, y mensajes como ENd, Cd, CL, tcL o códigos de error. Revisa "Mensajes y códigos de error" en la Guía.</p>`);
+      if (tipo === 't') return caja(`<h4>Luces de temperatura ${pag('panel')}</h4><p>Fría, 20, 30, 40, 50 y 60 °C. Se ilumina la elegida; las que permite el programa quedan tenues. Se cambia con el botón Temperatura.</p>`);
+      if (tipo === 'r') return caja(`<h4>Luces de centrifugado ${pag(31)}</h4><p>Se ilumina la velocidad elegida (rpm). Se cambia con el botón Centrifugado. "No" = sin centrifugado final.</p>`);
     }
 
     function cargarTanda(t) {
       encender();
+      if (t.tipo === 'secado') {
+        // Solo secar: encendida y Secado sin girar la perilla.
+        Object.assign(S, { modo: 'soloSecado', prog: null, temp: null, rpm: t.rpm, sec: t.modo, eco: false });
+        decir(`Así debería verse tu panel para secar <b>${esc(t.nombres.join(', '))}</b>: Sólo Secado en <b>${nombreSec(t.modo)}</b>${t.rpm === '-' ? ', sin centrifugado previo' : `, centrifugado previo ${fmtR(t.rpm)}`}. Recuerda: enciende y presiona Secado sin girar la perilla.`, pag(34));
+        return render();
+      }
       if (t.prog) elegir(t.prog);
       if (t.temp) S.temp = t.temp;
       if (t.rpm) S.rpm = t.rpm;
-      S.int = t.op.intensivo; S.pre = t.op.prelavado; S.enj = t.op.enjuague;
+      Object.assign(S, { vapor: t.op.vapor, turbo: t.op.turbo, pre: t.op.prelavado, enj: t.op.enjuague });
       if (t.secado && t.secado.modo && t.secado.via === 'opcion') S.sec = t.secado.modo;
+      const ops = [t.op.vapor && 'Vapor', t.op.turbo && 'TurboWash', t.op.prelavado && 'Pre-Lavado', t.op.enjuague && 'Enjuague+'].filter(Boolean);
       const despues = t.secado && t.secado.modo && t.secado.via === 'despues' ? ` El secado (${nombreSec(t.secado.modo)}) lo haces después, con Sólo Secado.` : '';
-      decir(`Así debería verse tu panel para <b>${esc(t.nombres.join(', '))}</b>: ${PROGRAMAS[t.prog].nombre}, ${t.temp ? fmtT(t.temp) : ''}, ${fmtR(t.rpm)}${t.op.intensivo ? ', Intensivo' : ''}${t.op.prelavado ? ', Pre-Lavado' : ''}${t.op.enjuague ? ', Enjuague+' : ''}${S.sec ? ', Secado ' + nombreSec(S.sec) : ''}.${despues} Compáralo con tu lavadora antes de presionar Inicio/Pausa.`);
+      decir(`Así debería verse tu panel para <b>${esc(t.nombres.join(', '))}</b>: ${PROGRAMAS[t.prog].nombre}, ${t.temp ? fmtT(t.temp) + ', ' : ''}${fmtR(t.rpm)}${ops.length ? ', ' + ops.join(', ') : ''}${S.sec ? ', Secado ' + nombreSec(S.sec) : ''}.${despues} Compáralo con tu lavadora antes de presionar Inicio/Pausa.`);
       render();
     }
 
@@ -733,8 +906,8 @@
       const secIco = S.sec && SECADO[S.sec].icono;
       let pantalla = '';
       if (on) {
-        if (S.bloqueo && S.pantalla === 'CL') pantalla = 'CL';
-        else if (S.pantalla) pantalla = S.pantalla;
+        if (S.pantalla) pantalla = S.pantalla;
+        else if (S.bloqueo && !S.corriendo) pantalla = 'CL';
         else if (S.dif) pantalla = `${S.dif}:00`;
         else if (S.modo === 'soloSecado' && /^t\d+/.test(S.sec || '')) pantalla = { t30: '0:30', t60: '1:00', t120: '2:00' }[S.sec];
         else if (prog() && prog().minutos) pantalla = `0:${prog().minutos}`;
@@ -742,9 +915,11 @@
       }
       const tdisp = prog() && prog().temp && S.modo !== 'soloSecado' ? prog().temp.disp : [];
       const rdisp = S.modo === 'soloCentrifugado' ? RPMS : prog() && prog().rpm ? prog().rpm.disp : S.modo === 'soloSecado' ? PROGRAMAS.soloSecado.rpm.disp : [];
-      const celdaT = t => `<span class="luz ${on && S.temp === t ? 'on' : ''} ${on && tdisp.includes(t) ? 'disp' : ''}" data-explica="t">${t === 'Fría' ? 'Fría' : t + '℃'}</span>`;
-      const celdaR = r => `<span class="luz ${on && S.rpm === r ? 'on' : ''} ${on && rdisp.includes(r) ? 'disp' : ''}" data-explica="r">${r}</span>`;
+      const pi = (id, cls) => `<span class="pi ${cls}" data-explica="i:${id}">${icono(id)}</span>`;
+      const celdaT = t => `<span class="luz ${on && S.temp === t ? 'on' : ''} ${on && tdisp.includes(t) ? 'disp' : ''}" data-b="temperatura" data-explica="t">${t === 'Fría' ? 'Fría' : t + '℃'}</span>`;
+      const celdaR = r => `<span class="luz ${on && S.rpm === r ? 'on' : ''} ${on && rdisp.includes(r) ? 'disp' : ''}" data-b="centrifugado" data-explica="r">${r}</span>`;
       const progItem = id => `<button type="button" class="prog-item ${on && S.prog === id ? 'on' : ''}" data-prog="${id}" data-explica="p:${id}"><i></i>${PROGRAMAS[id].corto || PROGRAMAS[id].nombre}</button>`;
+      const tecla = (b, nombre, sub, encendida) => `<button type="button" class="tecla-sim ${lit(on && encendida)}" data-b="${b}" data-largo="1" data-explica="b:${b}"><i class="led"></i><span class="t-nom">${nombre}</span><small>${sub}</small></button>`;
 
       root.innerHTML = `
         <div class="perilla-zona">
@@ -752,67 +927,96 @@
           <div class="perilla"><div class="perilla-aro" style="transform:rotate(${on && S.prog ? knobAngulo(S.prog) : 0}deg)"><span class="perilla-marca"></span></div></div>
           <div class="prog-col der">${PERILLA.der.map(progItem).join('')}</div>
         </div>
-        <div class="pantalla ${on ? '' : 'apagada'}">
-          <div class="pant-fila arriba">
-            <span class="pi ${lit(on && S.corriendo && S.pantalla !== '---' && S.modo === 'programa' && AI_PROGS.includes(S.prog))}" data-explica="i:ai">${icono('ai')}</span>
-            <span class="sep"></span>
-            <span class="pi ${faseCls('faseLavado')}" data-explica="i:faseLavado">${icono('faseLavado')}</span>
-            <span class="pi ${faseCls('faseCentrifugado')}" data-explica="i:faseCentrifugado">${icono('faseCentrifugado')}</span>
-            <span class="pi ${faseCls('faseSecado')}" data-explica="i:faseSecado">${icono('faseSecado')}</span>
+        <div class="vidrio ${on ? '' : 'apagada'}">
+          <p class="vidrio-nota">*Para funciones extra: apriete durante 3 segundos</p>
+          <div class="vidrio-cuerpo">
+            <div class="disp">
+              <div class="disp-arriba">
+                ${pi('ai', lit(on && S.corriendo && S.pantalla !== '---' && S.modo === 'programa' && AI_PROGS.includes(S.prog)))}
+                <span class="sep"></span>
+                ${pi('faseLavado', faseCls('faseLavado'))}
+                ${pi('faseCentrifugado', faseCls('faseCentrifugado'))}
+                ${pi('faseSecado', faseCls('faseSecado'))}
+              </div>
+              <div class="lcd ${S.pantalla === '---' ? 'parpadea' : ''}" data-explica="lcd"><span class="lcd-fondo" aria-hidden="true">88:88</span><span class="lcd-txt">${esc(pantalla)}</span></div>
+              <div class="disp-fila">
+                ${pi('antiArrugas', lit(on && S.anti))}
+                ${pi('enjuague', lit(on && S.enj))}
+                ${pi('prelavado', lit(on && S.pre))}
+                ${pi('wifi', lit(on && S.wifi))}
+                ${pi('puerta', lit(on && S.corriendo && !S.pausa))}
+              </div>
+              <div class="disp-fila">
+                ${pi('secNormal', lit(on && secIco === 'secNormal'))}
+                ${pi('secPlancha', lit(on && secIco === 'secPlancha'))}
+                ${pi('secBaja', lit(on && secIco === 'secBaja'))}
+                <span class="caja">${pi('ecoE', lit(on && S.sec && S.eco))}<span class="sep"></span>${pi('ecoAgua', lit(on && S.sec && !S.eco))}</span>
+              </div>
+            </div>
+            <div class="ajustes-luces">
+              <div class="rejilla">${TEMPS.map(celdaT).join('')}</div>
+              <button type="button" class="tecla-txt" data-b="temperatura" data-largo="1" data-explica="b:temperatura">Temperatura</button>
+              <div class="rejilla">${RPMS.map(celdaR).join('')}</div>
+              <button type="button" class="tecla-txt" data-b="centrifugado" data-largo="1" data-explica="b:centrifugado">Centrifugado<small>*Avisos sonoros on/off</small></button>
+            </div>
           </div>
-          <div class="lcd ${S.pantalla === '---' ? 'parpadea' : ''}" data-explica="lcd">${esc(pantalla)}</div>
-          <div class="pant-fila">
-            <span class="pi ${lit(on && S.sonidoOff)}" data-explica="i:sonidoOff">${icono('sonidoOff')}</span>
-            <span class="pi ${lit(on && S.bloqueo)}" data-explica="i:bloqueo">${icono('bloqueo')}</span>
-            <span class="pi ${lit(on && S.wifi)}" data-explica="i:wifi">${icono('wifi')}</span>
-            <span class="pi ${lit(on && S.remoto)}" data-explica="i:remoto">${icono('remoto')}</span>
-            <span class="pi ${lit(on && S.corriendo && !S.pausa)}" data-explica="i:puerta">${icono('puerta')}</span>
+          <div class="teclas">
+            ${tecla('vapor', 'Vapor', '*Anti arrugas', S.vapor)}
+            ${tecla('turbowash', 'TurboWash', '*Enjuague+', S.turbo)}
+            ${tecla('secado', 'Secado', '*EcoHybrid', S.sec)}
+            ${tecla('retrasar', 'Retrasar fin', '*Wi-Fi', S.dif)}
+            ${tecla('anadir', 'Añadir elemento', '*Inicio remoto', S.corriendo && S.pausa)}
           </div>
-          <div class="pant-fila">
-            <span class="pi ${lit(on && S.pre)}" data-explica="i:prelavado">${icono('prelavado')}</span>
-            <span class="pi caja ${lit(on && secIco === 'secNormal')}" data-explica="i:secNormal">${icono('secNormal')}</span>
-            <span class="pi caja ${lit(on && secIco === 'secPlancha')}" data-explica="i:secPlancha">${icono('secPlancha')}</span>
-            <span class="pi caja ${lit(on && secIco === 'secBaja')}" data-explica="i:secBaja">${icono('secBaja')}</span>
-            <span class="pi caja ${lit(on && secIco === 'secEco')}" data-explica="i:secEco">${icono('secEco')}</span>
+          <div class="combos">
+            <button type="button" class="combo" data-b="comboPre" data-largo="1" data-explica="f:prelavado">*Pre-Lavado</button>
+            <span></span>
+            <button type="button" class="combo" data-b="comboBloqueo" data-largo="1" data-explica="f:bloqueo">*Bloqueo infantil</button>
           </div>
-        </div>
-        <div class="ajustes-luces">
-          <div class="rejilla">${TEMPS.map(celdaT).join('')}</div>
-          <button type="button" class="tecla-sim ancha" data-b="temperatura" data-largo="1" data-explica="b:temperatura">Temperatura</button>
-          <div class="rejilla">${RPMS.map(celdaR).join('')}</div>
-          <button type="button" class="tecla-sim ancha" data-b="centrifugado" data-explica="b:centrifugado">Centrifugado</button>
-        </div>
-        <div class="teclas">
-          <button type="button" class="tecla-sim ${lit(on && S.int)}" data-b="intensivo" data-largo="1" data-explica="b:intensivo"><i class="led"></i>Intensivo<small>*Pre-Lavado</small></button>
-          <button type="button" class="tecla-sim ${lit(on && S.enj)}" data-b="enjuague" data-explica="b:enjuague"><i class="led"></i>Enjuague+<small>&nbsp;</small></button>
-          <button type="button" class="tecla-sim ${lit(on && S.sec)}" data-b="secado" data-explica="b:secado"><i class="led"></i>Secado<small>${S.sec && on ? nombreSec(S.sec) : '&nbsp;'}</small></button>
-          <button type="button" class="tecla-sim ${lit(on && S.dif)}" data-b="diferido" data-largo="1" data-explica="b:diferido"><i class="led"></i>Tiempo Diferido<small>*Wi-Fi</small></button>
-          <button type="button" class="tecla-sim ${lit(on && S.pausa)}" data-b="anadir" data-largo="1" data-explica="b:anadir"><i class="led"></i>Añadir Elemento<small>*Inicio Remoto</small></button>
-        </div>
-        <div class="combos">
-          <button type="button" class="chip" data-b="comboSonido">Enjuague+ + Secado (3 s) · Sonido</button>
-          <button type="button" class="chip" data-b="comboBloqueo">T. Diferido + Añadir (3 s) · Bloqueo infantil</button>
         </div>
         <div class="power-fila">
           <button type="button" class="redondo ${lit(on)}" data-b="encendido" data-explica="b:encendido" aria-label="Encendido/Apagado"><svg viewBox="0 0 24 24" class="ico"><path d="M12 3v8M7 6.3a7.5 7.5 0 1 0 10 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
           ${S.corriendo ? '<button type="button" class="btn sec" data-b="siguienteFase">Siguiente fase ▸</button>' : '<span></span>'}
           <button type="button" class="redondo" data-b="inicio" data-explica="b:inicio" aria-label="Inicio/Pausa"><svg viewBox="0 0 24 24" class="ico"><path d="M6 6v12l7-6z" fill="currentColor"/><path d="M15.5 6v12M19 6v12" stroke="currentColor" stroke-width="2"/></svg></button>
         </div>`;
+
+      // Mensaje: arriba y sin quedar fijo. Si es largo se recorta con "Ver todo"; si no se ve, sale un aviso abajo.
+      const nuevo = msg !== ultimoMsg;
+      if (nuevo) { ultimoMsg = msg; msgAbierto = false; }
       const m = $('#panel-msg');
-      m.innerHTML = `<div>${conIconos(msg.txt)}</div>${msg.ref ? `<div class="refs">${msg.ref}</div>` : ''}`;
+      m.innerHTML = `<div class="msg-txt">${conIconos(msg.txt)}</div>${msg.ref ? `<div class="refs">${msg.ref}</div>` : ''}<button type="button" class="link msg-mas" hidden></button>`;
+      m.classList.remove('cortado');
+      m.classList.toggle('abierto', msgAbierto);
+      const txt = $('.msg-txt', m);
+      const mas = $('.msg-mas', m);
+      if (txt.scrollHeight > 96) {
+        m.classList.add('cortado');
+        mas.hidden = false;
+        mas.textContent = msgAbierto ? 'Ver menos' : 'Ver todo';
+        mas.onclick = () => { msgAbierto = !msgAbierto; m.classList.toggle('abierto', msgAbierto); mas.textContent = msgAbierto ? 'Ver menos' : 'Ver todo'; };
+      }
+      if (nuevo) avisarSiNoSeVe();
       $$('#panel-modo button').forEach(b => b.setAttribute('aria-pressed', String(S.explicar) === b.dataset.val));
       $('#tab-panel').classList.toggle('modo-explicar', S.explicar);
     }
 
+    let msgVisible = true;
+    new IntersectionObserver(([e]) => { msgVisible = e.intersectionRatio > 0.3; }, { root: $('#tab-panel'), threshold: [0, 0.3, 1] }).observe($('#panel-msg'));
+    function avisarSiNoSeVe() {
+      if (msgVisible || !$('#tab-panel').classList.contains('activa')) return;
+      const plano = textoPlano(msg.txt.replace(/\{i:\w+\}/g, '')).replace(/\s+/g, ' ').trim();
+      mostrarToast(`<span class="toast-txt">${esc(plano)}</span><span class="toast-ir">Ver ↑</span>`, {
+        accion: () => $('#tab-panel').scrollTo({ top: 0, behavior: 'smooth' })
+      });
+    }
+
     // ---------- eventos: toque y "mantener presionado" ----------
     const MANTENER_MS = 900;
+    const sim = $('#panel-sim');
     let pulsado = null;
     function iniciarPulsacion(e) {
-      const el = e.target.closest('[data-b], [data-prog], [data-explica]');
-      if (!el || !$('#panel-sim').contains(el) && !el.closest('.combos')) return;
-      if (S.explicar) return;
+      const el = e.target.closest('[data-b]');
+      if (!el || !sim.contains(el) || S.explicar || !el.dataset.largo) return;
       const b = el.dataset.b;
-      if (!b || !el.dataset.largo) return;
       el.classList.add('manteniendo');
       pulsado = { el, b, largo: false, t: setTimeout(() => { pulsado.largo = true; el.classList.remove('manteniendo'); acciones[b + 'Largo'](); render(); if (navigator.vibrate) navigator.vibrate(30); }, MANTENER_MS) };
     }
@@ -824,11 +1028,16 @@
       pulsado = null;
       if (!p.largo) { acciones[p.b](); render(); }
     }
-    const sim = $('#panel-sim');
+    function cancelarPulsacion() {
+      if (!pulsado) return;
+      clearTimeout(pulsado.t);
+      pulsado.el.classList.remove('manteniendo');
+      pulsado = null;
+    }
     sim.addEventListener('pointerdown', iniciarPulsacion);
     sim.addEventListener('pointerup', terminarPulsacion);
-    sim.addEventListener('pointercancel', () => { if (pulsado) { clearTimeout(pulsado.t); pulsado.el.classList.remove('manteniendo'); pulsado = null; } });
-    sim.addEventListener('pointerleave', () => { if (pulsado) { clearTimeout(pulsado.t); pulsado.el.classList.remove('manteniendo'); pulsado = null; } });
+    sim.addEventListener('pointercancel', cancelarPulsacion);
+    sim.addEventListener('pointerleave', cancelarPulsacion);
     sim.addEventListener('contextmenu', e => e.preventDefault());
     sim.addEventListener('click', e => {
       const el = e.target.closest('[data-b], [data-prog], [data-explica]');
@@ -847,7 +1056,7 @@
     });
     $$('#panel-modo button').forEach(b => b.addEventListener('click', () => {
       S.explicar = b.dataset.val === 'true';
-      decir(S.explicar ? 'Modo <b>¿Qué es esto?</b>: toca cualquier botón, luz o ícono y te explico qué es. No cambia nada del panel.' : 'Modo <b>Simular</b>: toca los botones como en tu lavadora. Mantén presionado Intensivo, Tiempo Diferido, Añadir Elemento o Temperatura para sus funciones escondidas.');
+      decir(S.explicar ? 'Modo <b>¿Qué es esto?</b>: toca cualquier botón, luz o ícono y te explico qué es. No cambia nada del panel.' : 'Modo <b>Simular</b>: toca los botones como en tu lavadora. Mantén presionado un botón para su función con <b>*</b>.');
       render();
     }));
     $('#panel-reiniciar').addEventListener('click', () => { acciones.reiniciar(); render(); });
@@ -861,7 +1070,15 @@
   construirGuia();
   irA('chat');
 
+  // Funciona sin internet. Cuando se publica una versión nueva, el celular la descarga sola al abrir la app:
+  // si recién abriste, recarga de una vez; si ya la estabas usando, ofrece actualizar.
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    const habia = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!habia) return;
+      if (performance.now() < 8000) return location.reload();
+      mostrarToast('<span class="toast-txt">Hay una versión nueva de la guía.</span><span class="toast-ir">Actualizar</span>', { ms: 0, accion: () => location.reload() });
+    });
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
 })();
